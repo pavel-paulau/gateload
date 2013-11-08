@@ -51,7 +51,7 @@ func (c *SyncGatewayClient) AddCookie(cookie *http.Cookie) {
 	c.client.cookie = cookie
 }
 
-func (c *SyncGatewayClient) PutSingleDoc(docid string, doc map[string]interface{}) {
+func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
 	b, _ := json.Marshal(doc)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/%s?new_edits=true", c.baseURI, docid)
@@ -89,8 +89,8 @@ func (c *SyncGatewayClient) GetChangesFeed(since string) map[string]interface{} 
 	return c.client.Do(req)
 }
 
-func (c *SyncGatewayClient) AddUser(name string, meta map[string]interface{}) {
-	b, _ := json.Marshal(meta)
+func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
+	b, _ := json.Marshal(auth)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_user/%s", c.baseAdminURI, name)
 	req, _ := http.NewRequest("PUT", uri, j)
@@ -99,8 +99,8 @@ func (c *SyncGatewayClient) AddUser(name string, meta map[string]interface{}) {
 	c.client.Do(req)
 }
 
-func (c *SyncGatewayClient) CreateSession(name string, meta map[string]interface{}) http.Cookie {
-	b, _ := json.Marshal(meta)
+func (c *SyncGatewayClient) CreateSession(name string, session Session) http.Cookie {
+	b, _ := json.Marshal(session)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_session", c.baseAdminURI)
 	req, _ := http.NewRequest("POST", uri, j)

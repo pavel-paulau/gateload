@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"strconv"
 	"sync"
 	"time"
@@ -27,53 +26,23 @@ func RandString(key string, expectedLength int) string {
 	return randString
 }
 
-func DocIterator(start, end int, size int, channel string) <-chan map[string]interface{} {
-	ch := make(chan map[string]interface{})
+type Doc struct {
+	Id       string            `json:"_id"`
+	Channels []string          `json:"channels"`
+	Data     map[string]string `json:"data"`
+}
+
+func DocIterator(start, end int, size int, channel string) <-chan Doc {
+	ch := make(chan Doc)
 	go func() {
 		for i := start; i < end; i++ {
 			docid := Hash(strconv.FormatInt(int64(i), 10))
-			doc := map[string]interface{}{
-				"_id":      docid,
-				"channels": []string{channel},
-				"data": map[string]string{
-					docid: RandString(docid, size),
-				},
+			doc := Doc{
+				Id:       docid,
+				Channels: []string{channel},
+				Data:     map[string]string{docid: RandString(docid, size)},
 			}
 			ch <- doc
-		}
-		close(ch)
-	}()
-	return ch
-}
-
-const ChannelQuota = 40
-
-type User struct {
-	SeqId               int
-	Type, Name, Channel string
-}
-
-func UserIterator(NumPullers, NumPushers int) <-chan User {
-	numUsers := NumPullers + NumPushers
-	usersTypes := make([]string, 0, numUsers)
-	for i := 0; i < NumPullers; i++ {
-		usersTypes = append(usersTypes, "puller")
-	}
-	for i := 0; i < NumPushers; i++ {
-		usersTypes = append(usersTypes, "pusher")
-	}
-	randSeq := rand.Perm(numUsers)
-
-	ch := make(chan User)
-	go func() {
-		for currUser := 0; currUser < numUsers; currUser++ {
-			currChannel := currUser / ChannelQuota
-			ch <- User{
-				currUser,
-				usersTypes[randSeq[currUser]],
-				fmt.Sprintf("user-%v", currUser),
-				fmt.Sprintf("channel-%v", currChannel),
-			}
 		}
 		close(ch)
 	}()
@@ -86,7 +55,7 @@ func RunPusher(c *SyncGatewayClient, channel string, size, seqId, sleepTime int,
 	defer wg.Done()
 
 	for doc := range DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, size, channel) {
-		c.PutSingleDoc(doc["_id"].(string), doc)
+		c.PutSingleDoc(doc.Id, doc)
 		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
 }
