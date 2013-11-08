@@ -1,4 +1,4 @@
-sgw_load
+gateload
 ========
 
 Sync Gateway workload generator

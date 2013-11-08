@@ -1,0 +1,9 @@
+{
+	"Hostname": "127.0.0.1",
+	"Database": "sync_gateway",
+	"DocSize": 1024,
+	"RampUpIntervalMs": 3600000,
+	"SleepTimeMs": 10000,
+	"NumPullers": 700,
+	"NumPushers": 300
+}
