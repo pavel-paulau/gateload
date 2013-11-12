@@ -75,7 +75,7 @@ func (c *SyncGatewayClient) GetSingleDoc(docid string) {
 }
 
 func (c *SyncGatewayClient) GetLastSeq() string {
-	uri := fmt.Sprintf("%s", c.baseURI)
+	uri := fmt.Sprintf("%s/", c.baseURI)
 	req, _ := http.NewRequest("GET", uri, nil)
 
 	resp := c.client.Do(req)
