@@ -15,6 +15,7 @@ type Config struct {
 	DocSize          int
 	RampUpIntervalMs int
 	SleepTimeMs      int
+	RunTimeMs        int
 }
 
 func ReadConfig(config *Config) {

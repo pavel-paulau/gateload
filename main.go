@@ -84,5 +84,10 @@ func main() {
 		wg.Add(1)
 		time.Sleep(time.Duration(rampUpDelay) * time.Millisecond)
 	}
-	wg.Wait()
+	if config.RunTimeMs > 0 {
+		time.Sleep(time.Duration(config.RunTimeMs-config.RampUpIntervalMs) * time.Millisecond)
+		log.Println("Shutting down clients")
+	} else {
+		wg.Wait()
+	}
 }
