@@ -23,13 +23,13 @@ func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		log.Println("%v", err)
+		log.Printf("%v", err)
 	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Println("%v", err)
+		log.Printf("%v", err)
 	}
 	json.Unmarshal(body, &mresp)
 	return
