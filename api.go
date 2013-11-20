@@ -65,7 +65,7 @@ func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
 func (c *SyncGatewayClient) GetBulkDocs(docs map[string][]map[string]string) {
 	b, _ := json.Marshal(docs)
 	j := bytes.NewReader(b)
-	uri := fmt.Sprintf("%s/_bulk_get", c.baseURI)
+	uri := fmt.Sprintf("%s/_bulk_get?revs=true&attachments=true", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
 	c.client.Do(req)
