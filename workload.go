@@ -85,24 +85,32 @@ func RevsIterator(ids []string) <-chan map[string][]map[string]string {
 	return ch
 }
 
+const MaxFirstFetch = 200
+
+func readFeed(c *SyncGatewayClient, feedType, lastSeq string) string {
+	feed := c.GetChangesFeed(feedType, lastSeq)
+
+	ids := []string{}
+	for _, doc := range feed["results"].([]interface{}) {
+		ids = append(ids, doc.(map[string]interface{})["id"].(string))
+	}
+	if len(ids) == 1 {
+		go c.GetSingleDoc(ids[0])
+	} else {
+		for docs := range RevsIterator(ids) {
+			c.GetBulkDocs(docs)
+		}
+	}
+
+	return feed["last_seq"].(string)
+}
+
 func RunPuller(c *SyncGatewayClient, channel string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	lastSeq := fmt.Sprintf("%s:%s", channel, c.GetLastSeq())
+	lastSeq := fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
+	lastSeq = readFeed(c, "normal", lastSeq)
 	for {
-		feed := c.GetChangesFeed("longpoll", lastSeq)
-		lastSeq = feed["last_seq"].(string)
-
-		ids := []string{}
-		for _, doc := range feed["results"].([]interface{}) {
-			ids = append(ids, doc.(map[string]interface{})["id"].(string))
-		}
-		if len(ids) == 1 {
-			go c.GetSingleDoc(ids[0])
-		} else {
-			for docs := range RevsIterator(ids) {
-				c.GetBulkDocs(docs)
-			}
-		}
+		lastSeq = readFeed(c, "longpoll", lastSeq)
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
 )
 
 type RestClient struct {
@@ -77,21 +76,17 @@ func (c *SyncGatewayClient) GetSingleDoc(docid string) {
 	c.client.Do(req)
 }
 
-func (c *SyncGatewayClient) GetLastSeq() string {
+func (c *SyncGatewayClient) GetLastSeq() float64 {
 	uri := fmt.Sprintf("%s/", c.baseURI)
 	req, _ := http.NewRequest("GET", uri, nil)
 
 	resp := c.client.Do(req)
-	return strconv.FormatFloat(resp["committed_update_seq"].(float64), 'f', 0, 64)
+	return resp["committed_update_seq"].(float64)
 }
 
-func (c *SyncGatewayClient) GetChangesFeed(feed, since string) map[string]interface{} {
+func (c *SyncGatewayClient) GetChangesFeed(feedType, since string) map[string]interface{} {
 	var uri string
-	if feed == "longpoll" {
-		uri = fmt.Sprintf("%s/_changes?feed=longpoll&heartbeat=300000&style=all_docs&since=%s", c.baseURI, since)
-	} else {
-		uri = fmt.Sprintf("%s/_changes?feed=normal&heartbeat=300000&style=all_docs", c.baseURI)
-	}
+	uri = fmt.Sprintf("%s/_changes?feed=%s&heartbeat=300000&style=all_docs&since=%s", c.baseURI, feedType, since)
 	req, _ := http.NewRequest("GET", uri, nil)
 
 	return c.client.Do(req)
