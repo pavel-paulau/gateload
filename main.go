@@ -68,7 +68,7 @@ func runUser(user User, config Config, wg *sync.WaitGroup) {
 	if user.Type == "pusher" {
 		go RunPusher(&c, user.Channel, config.DocSize, user.SeqId, config.SleepTimeMs, wg)
 	} else {
-		go RunPuller(&c, user.Channel, wg)
+		go RunPuller(&c, user.Channel, user.Name, wg)
 	}
 }
 

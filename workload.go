@@ -124,18 +124,19 @@ type Checkpoint struct {
 	LastSequence string `json:"lastSequence"`
 }
 
-func RunPuller(c *SyncGatewayClient, channel string, wg *sync.WaitGroup) {
+func RunPuller(c *SyncGatewayClient, channel, name string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	lastSeq := fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
 	lastSeq = readFeed(c, "normal", lastSeq)
 
-	checkpointId := int64(0)
+	checkpointSeqId := int64(0)
 	for {
 		timer := time.AfterFunc(CheckpointInverval, func() {
-			checkpointId += 1
 			checkpoint := Checkpoint{LastSequence: lastSeq}
-			c.SaveCheckpoint(Hash(strconv.FormatInt(checkpointId, 10)), checkpoint)
+			chechpointHash := fmt.Sprintf("%s-%s", name, Hash(strconv.FormatInt(checkpointSeqId, 10)))
+			c.SaveCheckpoint(chechpointHash, checkpoint)
+			checkpointSeqId += 1
 		})
 		lastSeq = readFeed(c, "longpoll", lastSeq)
 		timer.Stop()
