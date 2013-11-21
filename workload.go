@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -60,6 +61,30 @@ func RunPusher(c *SyncGatewayClient, channel string, size, seqId, sleepTime int,
 	}
 }
 
+const MaxRevsToGetInBulk = 50
+
+func RevsIterator(ids []string) <-chan map[string][]map[string]string {
+	ch := make(chan map[string][]map[string]string)
+
+	numRevsToGetInBulk := float64(len(ids))
+	numRevsGotten := 0
+	go func() {
+		for numRevsToGetInBulk > 0 {
+			bulkSize := int(math.Min(numRevsToGetInBulk, MaxRevsToGetInBulk))
+			docs := []map[string]string{}
+			for _, id := range ids[numRevsGotten : numRevsGotten+bulkSize] {
+				docs = append(docs, map[string]string{"id": id})
+			}
+			ch <- map[string][]map[string]string{"docs": docs}
+
+			numRevsGotten += bulkSize
+			numRevsToGetInBulk -= float64(bulkSize)
+		}
+		close(ch)
+	}()
+	return ch
+}
+
 func RunPuller(c *SyncGatewayClient, channel string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -75,11 +100,9 @@ func RunPuller(c *SyncGatewayClient, channel string, wg *sync.WaitGroup) {
 		if len(ids) == 1 {
 			go c.GetSingleDoc(ids[0])
 		} else {
-			docs := []map[string]string{}
-			for _, id := range ids {
-				docs = append(docs, map[string]string{"id": id})
+			for docs := range RevsIterator(ids) {
+				c.GetBulkDocs(docs)
 			}
-			c.GetBulkDocs(map[string][]map[string]string{"docs": docs})
 		}
 	}
 }
