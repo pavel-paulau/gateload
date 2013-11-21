@@ -65,7 +65,7 @@ func RunPuller(c *SyncGatewayClient, channel string, wg *sync.WaitGroup) {
 
 	lastSeq := fmt.Sprintf("%s:%s", channel, c.GetLastSeq())
 	for {
-		feed := c.GetChangesFeed(lastSeq)
+		feed := c.GetChangesFeed("longpoll", lastSeq)
 		lastSeq = feed["last_seq"].(string)
 
 		ids := []string{}

@@ -85,8 +85,13 @@ func (c *SyncGatewayClient) GetLastSeq() string {
 	return strconv.FormatFloat(resp["committed_update_seq"].(float64), 'f', 0, 64)
 }
 
-func (c *SyncGatewayClient) GetChangesFeed(since string) map[string]interface{} {
-	uri := fmt.Sprintf("%s/_changes?limit=10&feed=longpoll&since=%s", c.baseURI, since)
+func (c *SyncGatewayClient) GetChangesFeed(feed, since string) map[string]interface{} {
+	var uri string
+	if feed == "longpoll" {
+		uri = fmt.Sprintf("%s/_changes?feed=longpoll&heartbeat=300000&style=all_docs&since=%s", c.baseURI, since)
+	} else {
+		uri = fmt.Sprintf("%s/_changes?feed=normal&heartbeat=300000&style=all_docs", c.baseURI)
+	}
 	req, _ := http.NewRequest("GET", uri, nil)
 
 	return c.client.Do(req)
