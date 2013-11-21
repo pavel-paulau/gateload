@@ -58,6 +58,25 @@ func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/%s?new_edits=true", c.baseURI, docid)
 	req, _ := http.NewRequest("PUT", uri, j)
+
+	c.client.Do(req)
+}
+
+func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) interface{} {
+	b, _ := json.Marshal(revsDiff)
+	j := bytes.NewReader(b)
+	uri := fmt.Sprintf("%s/_revs_diff", c.baseURI)
+	req, _ := http.NewRequest("POST", uri, j)
+
+	return c.client.Do(req)
+}
+
+func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
+	b, _ := json.Marshal(docs)
+	j := bytes.NewReader(b)
+	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
+	req, _ := http.NewRequest("POST", uri, j)
+
 	c.client.Do(req)
 }
 

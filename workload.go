@@ -28,9 +28,11 @@ func RandString(key string, expectedLength int) string {
 }
 
 type Doc struct {
-	Id       string            `json:"_id"`
-	Channels []string          `json:"channels"`
-	Data     map[string]string `json:"data"`
+	Id        string                 `json:"_id"`
+	Rev       string                 `json:"_rev"`
+	Channels  []string               `json:"channels"`
+	Data      map[string]string      `json:"data"`
+	Revisions map[string]interface{} `json:"_revisions"`
 }
 
 func DocIterator(start, end int, size int, channel string) <-chan Doc {
@@ -38,10 +40,13 @@ func DocIterator(start, end int, size int, channel string) <-chan Doc {
 	go func() {
 		for i := start; i < end; i++ {
 			docid := Hash(strconv.FormatInt(int64(i), 10))
+			rev := Hash(strconv.FormatInt(int64(i*i), 10))
 			doc := Doc{
-				Id:       docid,
-				Channels: []string{channel},
-				Data:     map[string]string{docid: RandString(docid, size)},
+				Id:        docid,
+				Rev:       fmt.Sprintf("1-%s", rev),
+				Channels:  []string{channel},
+				Data:      map[string]string{docid: RandString(docid, size)},
+				Revisions: map[string]interface{}{"ids": []string{rev}, "start": 1},
 			}
 			ch <- doc
 		}
@@ -56,7 +61,15 @@ func RunPusher(c *SyncGatewayClient, channel string, size, seqId, sleepTime int,
 	defer wg.Done()
 
 	for doc := range DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, size, channel) {
-		c.PutSingleDoc(doc.Id, doc)
+		revsDiff := map[string][]string{
+			doc.Id: []string{doc.Rev},
+		}
+		c.PostRevsDiff(revsDiff)
+		docs := map[string]interface{}{
+			"docs":      []Doc{doc},
+			"new_edits": false,
+		}
+		c.PostBulkDocs(docs)
 		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
 }
