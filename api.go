@@ -15,6 +15,12 @@ type RestClient struct {
 }
 
 func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
 	req.Header.Set("Content-Encoding", "application/json")
 	req.Header.Set("Accept-Language", "en-us")
 	req.Header.Set("Accept-Encoding", "gzip, deflate")
