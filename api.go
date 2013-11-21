@@ -92,6 +92,15 @@ func (c *SyncGatewayClient) GetChangesFeed(feedType, since string) map[string]in
 	return c.client.Do(req)
 }
 
+func (c *SyncGatewayClient) SaveCheckpoint(id string, checkpoint Checkpoint) {
+	b, _ := json.Marshal(checkpoint)
+	j := bytes.NewReader(b)
+	uri := fmt.Sprintf("%s/_local/%s", c.baseURI, id)
+	req, _ := http.NewRequest("PUT", uri, j)
+
+	c.client.Do(req)
+}
+
 func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
 	b, _ := json.Marshal(auth)
 	j := bytes.NewReader(b)

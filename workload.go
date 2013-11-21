@@ -105,12 +105,26 @@ func readFeed(c *SyncGatewayClient, feedType, lastSeq string) string {
 	return feed["last_seq"].(string)
 }
 
+const CheckpointInverval = time.Duration(5000) * time.Millisecond
+
+type Checkpoint struct {
+	LastSequence string `json:"lastSequence"`
+}
+
 func RunPuller(c *SyncGatewayClient, channel string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	lastSeq := fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
 	lastSeq = readFeed(c, "normal", lastSeq)
+
+	checkpointId := int64(0)
 	for {
+		timer := time.AfterFunc(CheckpointInverval, func() {
+			checkpointId += 1
+			checkpoint := Checkpoint{LastSequence: lastSeq}
+			c.SaveCheckpoint(Hash(strconv.FormatInt(checkpointId, 10)), checkpoint)
+		})
 		lastSeq = readFeed(c, "longpoll", lastSeq)
+		timer.Stop()
 	}
 }
