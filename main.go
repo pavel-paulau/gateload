@@ -1,47 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"sync"
 	"time"
 )
-
-type User struct {
-	SeqId               int
-	Type, Name, Channel string
-}
-
-const ChannelQuota = 40
-
-func UserIterator(NumPullers, NumPushers int) <-chan User {
-	numUsers := NumPullers + NumPushers
-	usersTypes := make([]string, 0, numUsers)
-	for i := 0; i < NumPullers; i++ {
-		usersTypes = append(usersTypes, "puller")
-	}
-	for i := 0; i < NumPushers; i++ {
-		usersTypes = append(usersTypes, "pusher")
-	}
-	randSeq := rand.Perm(numUsers)
-
-	ch := make(chan User)
-	go func() {
-		for currUser := 0; currUser < numUsers; currUser++ {
-			currChannel := currUser / ChannelQuota
-			ch <- User{
-				SeqId:   currUser,
-				Type:    usersTypes[randSeq[currUser]],
-				Name:    fmt.Sprintf("user-%v", currUser),
-				Channel: fmt.Sprintf("channel-%v", currChannel),
-			}
-		}
-		close(ch)
-	}()
-	return ch
-}
 
 type UserAuth struct {
 	Name          string   `json:"name"`
