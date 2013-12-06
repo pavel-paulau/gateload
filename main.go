@@ -5,29 +5,20 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/pavel-paulau/gateload/api"
 )
 
-type UserAuth struct {
-	Name          string   `json:"name"`
-	Password      string   `json:"password"`
-	AdminChannels []string `json:"admin_channels"`
-}
-
-type Session struct {
-	Name string `json:"name"`
-	TTL  int    `json:"ttl"`
-}
-
-func createSession(admin *SyncGatewayClient, user User, config Config) http.Cookie {
-	userMeta := UserAuth{Name: user.Name, Password: "password", AdminChannels: []string{user.Channel}}
+func createSession(admin *api.SyncGatewayClient, user User, config Config) http.Cookie {
+	userMeta := api.UserAuth{Name: user.Name, Password: "password", AdminChannels: []string{user.Channel}}
 	admin.AddUser(user.Name, userMeta)
 
-	session := Session{Name: user.Name, TTL: 2592000} // 1 month
+	session := api.Session{Name: user.Name, TTL: 2592000} // 1 month
 	return admin.CreateSession(user.Name, session)
 }
 
 func runUser(user User, config Config, cookie http.Cookie, wg *sync.WaitGroup) {
-	c := SyncGatewayClient{}
+	c := api.SyncGatewayClient{}
 	c.Init(config.Hostname, config.Database)
 	c.AddCookie(&cookie)
 
@@ -43,7 +34,7 @@ func main() {
 	var config Config
 	ReadConfig(&config)
 
-	admin := SyncGatewayClient{}
+	admin := api.SyncGatewayClient{}
 	admin.Init(config.Hostname, config.Database)
 
 	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)

@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"bytes"
@@ -61,6 +61,14 @@ func (c *SyncGatewayClient) AddCookie(cookie *http.Cookie) {
 	c.client.cookie = cookie
 }
 
+type Doc struct {
+	Id        string                 `json:"_id"`
+	Rev       string                 `json:"_rev"`
+	Channels  []string               `json:"channels"`
+	Data      map[string]string      `json:"data"`
+	Revisions map[string]interface{} `json:"_revisions"`
+}
+
 func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
 	b, _ := json.Marshal(doc)
 	j := bytes.NewReader(b)
@@ -119,6 +127,10 @@ func (c *SyncGatewayClient) GetChangesFeed(feedType, since string) map[string]in
 	return c.client.Do(req)
 }
 
+type Checkpoint struct {
+	LastSequence string `json:"lastSequence"`
+}
+
 func (c *SyncGatewayClient) SaveCheckpoint(id string, checkpoint Checkpoint) {
 	b, _ := json.Marshal(checkpoint)
 	j := bytes.NewReader(b)
@@ -126,6 +138,12 @@ func (c *SyncGatewayClient) SaveCheckpoint(id string, checkpoint Checkpoint) {
 	req, _ := http.NewRequest("PUT", uri, j)
 
 	c.client.Do(req)
+}
+
+type UserAuth struct {
+	Name          string   `json:"name"`
+	Password      string   `json:"password"`
+	AdminChannels []string `json:"admin_channels"`
 }
 
 func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
@@ -136,6 +154,11 @@ func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
 
 	log.Printf("Adding user %s", name)
 	c.client.Do(req)
+}
+
+type Session struct {
+	Name string `json:"name"`
+	TTL  int    `json:"ttl"`
 }
 
 func (c *SyncGatewayClient) CreateSession(name string, session Session) http.Cookie {

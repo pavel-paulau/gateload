@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/pavel-paulau/gateload/api"
 )
 
 type User struct {
@@ -62,21 +64,13 @@ func RandString(key string, expectedLength int) string {
 	return randString
 }
 
-type Doc struct {
-	Id        string                 `json:"_id"`
-	Rev       string                 `json:"_rev"`
-	Channels  []string               `json:"channels"`
-	Data      map[string]string      `json:"data"`
-	Revisions map[string]interface{} `json:"_revisions"`
-}
-
-func DocIterator(start, end int, size int, channel string) <-chan Doc {
-	ch := make(chan Doc)
+func DocIterator(start, end int, size int, channel string) <-chan api.Doc {
+	ch := make(chan api.Doc)
 	go func() {
 		for i := start; i < end; i++ {
 			docid := Hash(strconv.FormatInt(int64(i), 10))
 			rev := Hash(strconv.FormatInt(int64(i*i), 10))
-			doc := Doc{
+			doc := api.Doc{
 				Id:        docid,
 				Rev:       fmt.Sprintf("1-%s", rev),
 				Channels:  []string{channel},
@@ -92,7 +86,7 @@ func DocIterator(start, end int, size int, channel string) <-chan Doc {
 
 const DocsPerUser = 1000000
 
-func RunPusher(c *SyncGatewayClient, channel string, size, seqId, sleepTime int, wg *sync.WaitGroup) {
+func RunPusher(c *api.SyncGatewayClient, channel string, size, seqId, sleepTime int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	for doc := range DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, size, channel) {
@@ -101,7 +95,7 @@ func RunPusher(c *SyncGatewayClient, channel string, size, seqId, sleepTime int,
 		}
 		c.PostRevsDiff(revsDiff)
 		docs := map[string]interface{}{
-			"docs":      []Doc{doc},
+			"docs":      []api.Doc{doc},
 			"new_edits": false,
 		}
 		c.PostBulkDocs(docs)
@@ -135,7 +129,7 @@ func RevsIterator(ids []string) <-chan map[string][]map[string]string {
 
 const MaxFirstFetch = 200
 
-func readFeed(c *SyncGatewayClient, feedType, lastSeq string) string {
+func readFeed(c *api.SyncGatewayClient, feedType, lastSeq string) string {
 	feed := c.GetChangesFeed(feedType, lastSeq)
 
 	ids := []string{}
@@ -155,11 +149,7 @@ func readFeed(c *SyncGatewayClient, feedType, lastSeq string) string {
 
 const CheckpointInverval = time.Duration(5000) * time.Millisecond
 
-type Checkpoint struct {
-	LastSequence string `json:"lastSequence"`
-}
-
-func RunPuller(c *SyncGatewayClient, channel, name string, wg *sync.WaitGroup) {
+func RunPuller(c *api.SyncGatewayClient, channel, name string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	lastSeq := fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
@@ -168,7 +158,7 @@ func RunPuller(c *SyncGatewayClient, channel, name string, wg *sync.WaitGroup) {
 	checkpointSeqId := int64(0)
 	for {
 		timer := time.AfterFunc(CheckpointInverval, func() {
-			checkpoint := Checkpoint{LastSequence: lastSeq}
+			checkpoint := api.Checkpoint{LastSequence: lastSeq}
 			chechpointHash := fmt.Sprintf("%s-%s", name, Hash(strconv.FormatInt(checkpointSeqId, 10)))
 			c.SaveCheckpoint(chechpointHash, checkpoint)
 			checkpointSeqId += 1
