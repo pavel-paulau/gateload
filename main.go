@@ -7,9 +7,10 @@ import (
 	"time"
 
 	"github.com/pavel-paulau/gateload/api"
+	"github.com/pavel-paulau/gateload/workload"
 )
 
-func createSession(admin *api.SyncGatewayClient, user User, config Config) http.Cookie {
+func createSession(admin *api.SyncGatewayClient, user workload.User, config workload.Config) http.Cookie {
 	userMeta := api.UserAuth{Name: user.Name, Password: "password", AdminChannels: []string{user.Channel}}
 	admin.AddUser(user.Name, userMeta)
 
@@ -17,22 +18,22 @@ func createSession(admin *api.SyncGatewayClient, user User, config Config) http.
 	return admin.CreateSession(user.Name, session)
 }
 
-func runUser(user User, config Config, cookie http.Cookie, wg *sync.WaitGroup) {
+func runUser(user workload.User, config workload.Config, cookie http.Cookie, wg *sync.WaitGroup) {
 	c := api.SyncGatewayClient{}
 	c.Init(config.Hostname, config.Database)
 	c.AddCookie(&cookie)
 
 	log.Printf("Starting new %s", user.Type)
 	if user.Type == "pusher" {
-		go RunPusher(&c, user.Channel, config.DocSize, user.SeqId, config.SleepTimeMs, wg)
+		go workload.RunPusher(&c, user.Channel, config.DocSize, user.SeqId, config.SleepTimeMs, wg)
 	} else {
-		go RunPuller(&c, user.Channel, user.Name, wg)
+		go workload.RunPuller(&c, user.Channel, user.Name, wg)
 	}
 }
 
 func main() {
-	var config Config
-	ReadConfig(&config)
+	var config workload.Config
+	workload.ReadConfig(&config)
 
 	admin := api.SyncGatewayClient{}
 	admin.Init(config.Hostname, config.Database)
@@ -41,7 +42,7 @@ func main() {
 	rampUpDelayMs := time.Duration(rampUpDelay) * time.Millisecond
 
 	wg := sync.WaitGroup{}
-	for user := range UserIterator(config.NumPullers, config.NumPushers) {
+	for user := range workload.UserIterator(config.NumPullers, config.NumPushers) {
 		t0 := time.Now()
 		cookie := createSession(&admin, user, config)
 		t1 := time.Now()
