@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"net/http"
 	"sync"
 	"time"
 )
@@ -53,15 +54,17 @@ type Session struct {
 	TTL  int    `json:"ttl"`
 }
 
-func runUser(user User, config Config, wg *sync.WaitGroup) {
-	c := SyncGatewayClient{}
-	c.Init(config.Hostname, config.Database)
-
+func createSession(admin *SyncGatewayClient, user User, config Config) http.Cookie {
 	userMeta := UserAuth{Name: user.Name, Password: "password", AdminChannels: []string{user.Channel}}
-	c.AddUser(user.Name, userMeta)
+	admin.AddUser(user.Name, userMeta)
 
 	session := Session{Name: user.Name, TTL: 2592000} // 1 month
-	cookie := c.CreateSession(user.Name, session)
+	return admin.CreateSession(user.Name, session)
+}
+
+func runUser(user User, config Config, cookie http.Cookie, wg *sync.WaitGroup) {
+	c := SyncGatewayClient{}
+	c.Init(config.Hostname, config.Database)
 	c.AddCookie(&cookie)
 
 	log.Printf("Starting new %s", user.Type)
@@ -76,11 +79,15 @@ func main() {
 	var config Config
 	ReadConfig(&config)
 
+	admin := SyncGatewayClient{}
+	admin.Init(config.Hostname, config.Database)
+
 	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
 
 	wg := sync.WaitGroup{}
 	for user := range UserIterator(config.NumPullers, config.NumPushers) {
-		go runUser(user, config, &wg)
+		cookie := createSession(&admin, user, config)
+		go runUser(user, config, cookie, &wg)
 		wg.Add(1)
 		time.Sleep(time.Duration(rampUpDelay) * time.Millisecond)
 	}
