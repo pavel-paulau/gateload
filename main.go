@@ -83,13 +83,17 @@ func main() {
 	admin.Init(config.Hostname, config.Database)
 
 	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
+	rampUpDelayMs := time.Duration(rampUpDelay) * time.Millisecond
 
 	wg := sync.WaitGroup{}
 	for user := range UserIterator(config.NumPullers, config.NumPushers) {
+		t0 := time.Now()
 		cookie := createSession(&admin, user, config)
+		t1 := time.Now()
+
 		go runUser(user, config, cookie, &wg)
 		wg.Add(1)
-		time.Sleep(time.Duration(rampUpDelay) * time.Millisecond)
+		time.Sleep(rampUpDelayMs - t1.Sub(t0))
 	}
 	if config.RunTimeMs > 0 {
 		time.Sleep(time.Duration(config.RunTimeMs-config.RampUpIntervalMs) * time.Millisecond)
