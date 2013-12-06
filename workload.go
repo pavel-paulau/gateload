@@ -108,7 +108,7 @@ func readFeed(c *SyncGatewayClient, feedType, lastSeq string) string {
 		ids = append(ids, doc.(map[string]interface{})["id"].(string))
 	}
 	if len(ids) == 1 {
-		go c.GetSingleDoc(ids[0])
+		c.GetSingleDoc(ids[0])
 	} else {
 		for docs := range RevsIterator(ids) {
 			c.GetBulkDocs(docs)
