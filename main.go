@@ -38,19 +38,22 @@ func main() {
 	admin := api.SyncGatewayClient{}
 	admin.Init(config.Hostname, config.Database)
 
+	users := [][]interface{}{}
+	for user := range workload.UserIterator(config.NumPullers, config.NumPushers) {
+		cookie := createSession(&admin, user, config)
+		users = append(users, []interface{}{user, cookie})
+	}
+
 	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
 	rampUpDelayMs := time.Duration(rampUpDelay) * time.Millisecond
-
 	wg := sync.WaitGroup{}
-	for user := range workload.UserIterator(config.NumPullers, config.NumPushers) {
-		t0 := time.Now()
-		cookie := createSession(&admin, user, config)
-		t1 := time.Now()
-
-		go runUser(user, config, cookie, &wg)
+	for _, user := range users {
+		wg := sync.WaitGroup{}
+		go runUser(user[0].(workload.User), config, user[1].(http.Cookie), &wg)
 		wg.Add(1)
-		time.Sleep(rampUpDelayMs - t1.Sub(t0))
+		time.Sleep(rampUpDelayMs)
 	}
+
 	if config.RunTimeMs > 0 {
 		time.Sleep(time.Duration(config.RunTimeMs-config.RampUpIntervalMs) * time.Millisecond)
 		log.Println("Shutting down clients")
