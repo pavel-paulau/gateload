@@ -24,7 +24,7 @@ func runUser(user workload.User, config workload.Config, cookie http.Cookie, wg 
 	c.Init(config.Hostname, config.Database)
 	c.AddCookie(&cookie)
 
-	log.Printf("Starting new %s", user.Type)
+	log.Printf("Starting new %s (%s)", user.Type, user.Name)
 	if user.Type == "pusher" {
 		go workload.RunPusher(&c, user.Channel, config.DocSize, user.SeqId, config.SleepTimeMs, wg)
 	} else {
