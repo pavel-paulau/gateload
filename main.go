@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"runtime"
 	"sync"
 	"time"
 
@@ -32,6 +33,8 @@ func runUser(user workload.User, config workload.Config, cookie http.Cookie, wg 
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
 	var config workload.Config
 	workload.ReadConfig(&config)
 
