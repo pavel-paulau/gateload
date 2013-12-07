@@ -72,7 +72,7 @@ type Doc struct {
 func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
 	b, _ := json.Marshal(doc)
 	j := bytes.NewReader(b)
-	uri := fmt.Sprintf("%s/%s?new_edits=true", c.baseURI, docid)
+	uri := fmt.Sprintf("%s/%s?new_edits=false", c.baseURI, docid)
 	req, _ := http.NewRequest("PUT", uri, j)
 
 	c.client.Do(req)
