@@ -16,6 +16,8 @@ type Config struct {
 	RampUpIntervalMs int
 	SleepTimeMs      int
 	RunTimeMs        int
+	SerieslyHostname string
+	SerieslyDatabase string
 }
 
 func ReadConfig(config *Config) {
