@@ -132,8 +132,6 @@ type Checkpoint struct {
 }
 
 func (c *SyncGatewayClient) SaveCheckpoint(id string, checkpoint Checkpoint) {
-	log.Printf("Saving checkpoint: %s", id)
-
 	b, _ := json.Marshal(checkpoint)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_local/%s", c.baseURI, id)
