@@ -21,7 +21,7 @@ func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
 		}
 	}()
 
-	req.Header.Set("Content-Encoding", "application/json")
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Language", "en-us")
 	req.Header.Set("Accept-Encoding", "gzip, deflate")
 	if c.cookie != nil {
