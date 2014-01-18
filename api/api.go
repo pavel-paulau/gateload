@@ -117,8 +117,14 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
 	c.client.DoRaw(req) // _bulk_docs returns JSON array, not object, so Do can't parse it
 }
 
-func (c *SyncGatewayClient) GetBulkDocs(docs map[string][]map[string]string) {
-	b, _ := json.Marshal(docs)
+type BulkDocsEntry struct {
+	ID  string
+	Rev string
+}
+
+func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) {
+	body := map[string][]BulkDocsEntry{"docs": docs}
+	b, _ := json.Marshal(body)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_get?revs=true&attachments=true", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
@@ -126,8 +132,11 @@ func (c *SyncGatewayClient) GetBulkDocs(docs map[string][]map[string]string) {
 	c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
 }
 
-func (c *SyncGatewayClient) GetSingleDoc(docid string) {
+func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) {
 	uri := fmt.Sprintf("%s/%s", c.baseURI, docid)
+	if revid != "" {
+		uri += "?rev=" + revid
+	}
 	req, _ := http.NewRequest("GET", uri, nil)
 	c.client.Do(req)
 }

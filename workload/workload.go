@@ -132,19 +132,26 @@ const MaxFirstFetch = 200
 func readFeed(c *api.SyncGatewayClient, feedType, lastSeq string) string {
 	feed := c.GetChangesFeed(feedType, lastSeq)
 
-	ids := []string{}
-	for _, doc := range feed["results"].([]interface{}) {
-		ids = append(ids, doc.(map[string]interface{})["id"].(string))
+	newLastSeq := feed["last_seq"].(string)
+	results := feed["results"].([]interface{})
+	docs := []api.BulkDocsEntry{}
+	for _, result := range results {
+		doc := result.(map[string]interface{})
+		docID := doc["id"].(string)
+		seq := doc["seq"].(string)
+		changes := doc["changes"].([]interface{})
+		change := changes[0].(map[string]interface{})
+		revID := change["rev"].(string)
+
+		docs = append(docs, api.BulkDocsEntry{ID: docID, Rev: revID})
 	}
-	if len(ids) == 1 {
-		c.GetSingleDoc(ids[0])
+	if len(docs) == 1 {
+		c.GetSingleDoc(docs[0].ID, docs[0].Rev)
 	} else {
-		for docs := range RevsIterator(ids) {
-			c.GetBulkDocs(docs)
-		}
+		c.GetBulkDocs(docs)
 	}
 
-	return feed["last_seq"].(string)
+	return newLastSeq
 }
 
 const CheckpointInverval = time.Duration(5000) * time.Millisecond
