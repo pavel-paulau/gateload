@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strings"
 )
 
 type RestClient struct {
@@ -14,7 +15,7 @@ type RestClient struct {
 	cookie interface{}
 }
 
-func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
+func (c *RestClient) DoRaw(req *http.Request) *http.Response {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Fatal(err)
@@ -30,15 +31,35 @@ func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		log.Printf("%v", err)
+		log.Printf("WARNING: Network error: %v", err)
+		return nil
+	} else if resp.StatusCode >= 300 {
+		log.Printf("WARNING: HTTP error: Status %d %s", resp.StatusCode, resp.Status)
+		return nil
+	}
+	return resp
+}
+
+func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
+	resp := c.DoRaw(req)
+	if resp == nil {
+		return
+	}
+	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+		log.Panicf("Non-JSON response for %v", req)
+		return
 	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("%v", err)
+		log.Panicf("Can't read HTTP response: %v", err)
+		return
 	}
-	json.Unmarshal(body, &mresp)
+
+	if err = json.Unmarshal(body, &mresp); err != nil {
+		log.Panicf("Can't parse response JSON: %v\nrequest = %v\n%s", err, req, body)
+	}
 	return
 }
 
@@ -84,7 +105,7 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) interface
 	uri := fmt.Sprintf("%s/_revs_diff", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	return c.client.Do(req)
+	return c.client.DoRaw(req) // _revs_diff returns JSON array, not object, so Do can't parse it
 }
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
@@ -93,7 +114,7 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	c.client.Do(req)
+	c.client.DoRaw(req) // _bulk_docs returns JSON array, not object, so Do can't parse it
 }
 
 func (c *SyncGatewayClient) GetBulkDocs(docs map[string][]map[string]string) {
@@ -102,7 +123,7 @@ func (c *SyncGatewayClient) GetBulkDocs(docs map[string][]map[string]string) {
 	uri := fmt.Sprintf("%s/_bulk_get?revs=true&attachments=true", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	c.client.Do(req)
+	c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
 }
 
 func (c *SyncGatewayClient) GetSingleDoc(docid string) {
@@ -153,7 +174,7 @@ func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
 	req, _ := http.NewRequest("PUT", uri, j)
 
 	log.Printf("Adding user %s", name)
-	c.client.Do(req)
+	c.client.DoRaw(req)
 }
 
 type Session struct {
