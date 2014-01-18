@@ -24,7 +24,7 @@ func (c *RestClient) DoRaw(req *http.Request) *http.Response {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Language", "en-us")
-	req.Header.Set("Accept-Encoding", "gzip, deflate")
+	//req.Header.Set("Accept-Encoding", "gzip, deflate")
 	if c.cookie != nil {
 		req.AddCookie(c.cookie.(*http.Cookie))
 	}
