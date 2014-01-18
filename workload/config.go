@@ -18,7 +18,10 @@ type Config struct {
 	RunTimeMs        int
 	SerieslyHostname string
 	SerieslyDatabase string
+	Verbose          bool
 }
+
+var Verbose = false
 
 func ReadConfig(config *Config) {
 	workload_path := flag.String("workload", "workload.json", "Path to workload configuration")
@@ -33,4 +36,5 @@ func ReadConfig(config *Config) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	Verbose = config.Verbose
 }

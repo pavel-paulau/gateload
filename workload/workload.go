@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"strconv"
@@ -12,6 +13,12 @@ import (
 
 	"github.com/pavel-paulau/gateload/api"
 )
+
+func Log(fmt string, args ...interface{}) {
+	if Verbose {
+		log.Printf(fmt, args...)
+	}
+}
 
 type User struct {
 	SeqId               int
@@ -99,6 +106,7 @@ func RunPusher(c *api.SyncGatewayClient, channel string, size, seqId, sleepTime 
 			"new_edits": false,
 		}
 		c.PostBulkDocs(docs)
+		Log("Pusher saved doc %q", doc.Id)
 		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
 }
@@ -134,6 +142,7 @@ func readFeed(c *api.SyncGatewayClient, feedType, lastSeq string) string {
 
 	newLastSeq := feed["last_seq"].(string)
 	results := feed["results"].([]interface{})
+	Log("Puller received %d changes since %q (now at %q):", len(results), lastSeq, newLastSeq)
 	docs := []api.BulkDocsEntry{}
 	for _, result := range results {
 		doc := result.(map[string]interface{})
@@ -144,6 +153,7 @@ func readFeed(c *api.SyncGatewayClient, feedType, lastSeq string) string {
 		revID := change["rev"].(string)
 
 		docs = append(docs, api.BulkDocsEntry{ID: docID, Rev: revID})
+		Log("\t%s : %q / %q", seq, docID, revID)
 	}
 	if len(docs) == 1 {
 		c.GetSingleDoc(docs[0].ID, docs[0].Rev)
@@ -169,6 +179,7 @@ func RunPuller(c *api.SyncGatewayClient, channel, name string, wg *sync.WaitGrou
 			chechpointHash := fmt.Sprintf("%s-%s", name, Hash(strconv.FormatInt(checkpointSeqId, 10)))
 			c.SaveCheckpoint(chechpointHash, checkpoint)
 			checkpointSeqId += 1
+			Log("Puller saved remote checkpoint")
 		})
 		lastSeq = readFeed(c, "longpoll", lastSeq)
 		timer.Stop()
