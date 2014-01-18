@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pavel-paulau/gateload/api"
+	"github.com/couchbaselabs/gateload/api"
 )
 
 func Log(fmt string, args ...interface{}) {

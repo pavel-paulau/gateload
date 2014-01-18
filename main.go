@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pavel-paulau/gateload/api"
-	"github.com/pavel-paulau/gateload/workload"
+	"github.com/couchbaselabs/gateload/api"
+	"github.com/couchbaselabs/gateload/workload"
 )
 
 func createSession(admin *api.SyncGatewayClient, user workload.User, config workload.Config) http.Cookie {
