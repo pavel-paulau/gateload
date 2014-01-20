@@ -99,13 +99,14 @@ func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
 	c.client.Do(req)
 }
 
-func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) interface{} {
+func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 	b, _ := json.Marshal(revsDiff)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_revs_diff", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	return c.client.DoRaw(req) // _revs_diff returns JSON array, not object, so Do can't parse it
+	resp := c.client.DoRaw(req) // _revs_diff returns JSON array, not object, so Do can't parse it
+	resp.Body.Close()
 }
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
@@ -114,7 +115,8 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	c.client.DoRaw(req) // _bulk_docs returns JSON array, not object, so Do can't parse it
+	resp := c.client.DoRaw(req) // _bulk_docs returns JSON array, not object, so Do can't parse it
+	resp.Body.Close()
 }
 
 type BulkDocsEntry struct {
@@ -129,7 +131,8 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) {
 	uri := fmt.Sprintf("%s/_bulk_get?revs=true&attachments=true", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
+	resp := c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
+	resp.Body.Close()
 }
 
 func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) {
@@ -183,7 +186,8 @@ func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
 	req, _ := http.NewRequest("PUT", uri, j)
 
 	log.Printf("Adding user %s", name)
-	c.client.DoRaw(req)
+	resp := c.client.DoRaw(req)
+	resp.Body.Close()
 }
 
 type Session struct {
