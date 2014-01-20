@@ -106,7 +106,12 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 	req, _ := http.NewRequest("POST", uri, j)
 
 	resp := c.client.DoRaw(req) // _revs_diff returns JSON array, not object, so Do can't parse it
-	resp.Body.Close()
+	defer resp.Body.Close()
+	_, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Panicf("Can't read HTTP response: %v", err)
+		return
+	}
 }
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
@@ -116,7 +121,12 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
 	req, _ := http.NewRequest("POST", uri, j)
 
 	resp := c.client.DoRaw(req) // _bulk_docs returns JSON array, not object, so Do can't parse it
-	resp.Body.Close()
+	defer resp.Body.Close()
+	_, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Panicf("Can't read HTTP response: %v", err)
+		return
+	}
 }
 
 type BulkDocsEntry struct {
@@ -132,7 +142,12 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) {
 	req, _ := http.NewRequest("POST", uri, j)
 
 	resp := c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
-	resp.Body.Close()
+	defer resp.Body.Close()
+	_, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Panicf("Can't read HTTP response: %v", err)
+		return
+	}
 }
 
 func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) {
@@ -187,7 +202,12 @@ func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
 
 	log.Printf("Adding user %s", name)
 	resp := c.client.DoRaw(req)
-	resp.Body.Close()
+	defer resp.Body.Close()
+	_, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Panicf("Can't read HTTP response: %v", err)
+		return
+	}
 }
 
 type Session struct {
