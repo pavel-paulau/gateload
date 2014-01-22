@@ -63,7 +63,7 @@ func main() {
 		log.Printf("worker done")
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 16; i++ {
 		log.Printf("starting worker")
 		adminWg.Add(1)
 		go worker()
