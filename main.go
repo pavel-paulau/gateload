@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"net/http"
 	"runtime"
 	"sync"
 	"time"
@@ -11,20 +10,20 @@ import (
 	"github.com/couchbaselabs/gateload/workload"
 )
 
-func createSession(admin *api.SyncGatewayClient, user workload.User, config workload.Config) http.Cookie {
+func createSession(admin *api.SyncGatewayClient, user *workload.User, config workload.Config) {
 	userMeta := api.UserAuth{Name: user.Name, Password: "password", AdminChannels: []string{user.Channel}}
 	admin.AddUser(user.Name, userMeta)
 
 	session := api.Session{Name: user.Name, TTL: 2592000} // 1 month
-	return admin.CreateSession(user.Name, session)
+	user.Cookie = admin.CreateSession(user.Name, session)
 }
 
-func runUser(user workload.User, config workload.Config, cookie http.Cookie, wg *sync.WaitGroup) {
+func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 	c := api.SyncGatewayClient{}
 	c.Init(config.Hostname, config.Database)
-	c.AddCookie(&cookie)
+	c.AddCookie(&user.Cookie)
 
-	log.Printf("Starting new %s (%s)", user.Type, user.Name)
+	log.Printf("Starting new %s (%s) - ", user.Type, user.Name, user.Cookie)
 	if user.Type == "pusher" {
 		go workload.RunPusher(&c, user.Channel, config.DocSize, user.SeqId, config.SleepTimeMs, wg)
 	} else {
@@ -41,18 +40,46 @@ func main() {
 	admin := api.SyncGatewayClient{}
 	admin.Init(config.Hostname, config.Database)
 
-	users := [][]interface{}{}
-	for user := range workload.UserIterator(config.NumPullers, config.NumPushers) {
-		cookie := createSession(&admin, user, config)
-		users = append(users, []interface{}{user, cookie})
+	pendingUsers := make(chan *workload.User)
+	users := []*workload.User{}
+
+	// start a routine to place pending users into array
+	go func() {
+		for pendingUser := range pendingUsers {
+			users = append(users, pendingUser)
+		}
+		log.Printf("pending users routine done")
+	}()
+
+	// use a fixed number of workers to create the users/sessions
+	userIterator := workload.UserIterator(config.NumPullers, config.NumPushers)
+	adminWg := sync.WaitGroup{}
+	worker := func() {
+		defer adminWg.Done()
+		for user := range userIterator {
+			createSession(&admin, user, config)
+			pendingUsers <- user
+		}
+		log.Printf("worker done")
 	}
+
+	for i := 0; i < 4; i++ {
+		log.Printf("starting worker")
+		adminWg.Add(1)
+		go worker()
+	}
+
+	// wait for all the workers to finish
+	adminWg.Wait()
+	// close the pending users channel to free that routine
+	close(pendingUsers)
 
 	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
 	rampUpDelayMs := time.Duration(rampUpDelay) * time.Millisecond
 	wg := sync.WaitGroup{}
 	for _, user := range users {
 		wg := sync.WaitGroup{}
-		go runUser(user[0].(workload.User), config, user[1].(http.Cookie), &wg)
+		go runUser(user, config, &wg)
 		wg.Add(1)
 		time.Sleep(rampUpDelayMs)
 	}

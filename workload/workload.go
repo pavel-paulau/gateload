@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -23,11 +24,12 @@ func Log(fmt string, args ...interface{}) {
 type User struct {
 	SeqId               int
 	Type, Name, Channel string
+	Cookie              http.Cookie
 }
 
 const ChannelQuota = 40
 
-func UserIterator(NumPullers, NumPushers int) <-chan User {
+func UserIterator(NumPullers, NumPushers int) <-chan *User {
 	numUsers := NumPullers + NumPushers
 	usersTypes := make([]string, 0, numUsers)
 	for i := 0; i < NumPullers; i++ {
@@ -38,11 +40,11 @@ func UserIterator(NumPullers, NumPushers int) <-chan User {
 	}
 	randSeq := rand.Perm(numUsers)
 
-	ch := make(chan User)
+	ch := make(chan *User)
 	go func() {
 		for currUser := 0; currUser < numUsers; currUser++ {
 			currChannel := currUser / ChannelQuota
-			ch <- User{
+			ch <- &User{
 				SeqId:   currUser,
 				Type:    usersTypes[randSeq[currUser]],
 				Name:    fmt.Sprintf("user-%v", currUser),
