@@ -106,6 +106,9 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 	req, _ := http.NewRequest("POST", uri, j)
 
 	resp := c.client.DoRaw(req) // _revs_diff returns JSON array, not object, so Do can't parse it
+	if resp == nil {
+		return
+	}
 	defer resp.Body.Close()
 	_, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -121,6 +124,9 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
 	req, _ := http.NewRequest("POST", uri, j)
 
 	resp := c.client.DoRaw(req) // _bulk_docs returns JSON array, not object, so Do can't parse it
+	if resp == nil {
+		return
+	}
 	defer resp.Body.Close()
 	_, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -142,6 +148,9 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) {
 	req, _ := http.NewRequest("POST", uri, j)
 
 	resp := c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
+	if resp == nil {
+		return
+	}
 	defer resp.Body.Close()
 	_, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -202,6 +211,9 @@ func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
 
 	log.Printf("Adding user %s", name)
 	resp := c.client.DoRaw(req)
+	if resp == nil {
+		return
+	}
 	defer resp.Body.Close()
 	_, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
