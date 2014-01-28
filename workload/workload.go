@@ -29,7 +29,7 @@ type User struct {
 
 const ChannelQuota = 40
 
-func UserIterator(NumPullers, NumPushers int) <-chan *User {
+func UserIterator(NumPullers, NumPushers, UserOffset int) <-chan *User {
 	numUsers := NumPullers + NumPushers
 	usersTypes := make([]string, 0, numUsers)
 	for i := 0; i < NumPullers; i++ {
@@ -42,11 +42,11 @@ func UserIterator(NumPullers, NumPushers int) <-chan *User {
 
 	ch := make(chan *User)
 	go func() {
-		for currUser := 0; currUser < numUsers; currUser++ {
+		for currUser := UserOffset; currUser < numUsers; currUser++ {
 			currChannel := currUser / ChannelQuota
 			ch <- &User{
 				SeqId:   currUser,
-				Type:    usersTypes[randSeq[currUser]],
+				Type:    usersTypes[randSeq[currUser-UserOffset]],
 				Name:    fmt.Sprintf("user-%v", currUser),
 				Channel: fmt.Sprintf("channel-%v", currChannel),
 			}

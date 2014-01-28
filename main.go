@@ -52,7 +52,7 @@ func main() {
 	}()
 
 	// use a fixed number of workers to create the users/sessions
-	userIterator := workload.UserIterator(config.NumPullers, config.NumPushers)
+	userIterator := workload.UserIterator(config.NumPullers, config.NumPushers, config.UserOffset)
 	adminWg := sync.WaitGroup{}
 	worker := func() {
 		defer adminWg.Done()

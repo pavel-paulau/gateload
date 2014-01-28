@@ -12,6 +12,7 @@ type Config struct {
 	Database         string
 	NumPullers       int
 	NumPushers       int
+	UserOffset       int
 	DocSize          int
 	RampUpIntervalMs int
 	SleepTimeMs      int
