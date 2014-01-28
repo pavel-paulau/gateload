@@ -108,82 +108,87 @@ func RunPusher(c *api.SyncGatewayClient, channel string, size, seqId, sleepTime 
 			"new_edits": false,
 		}
 		c.PostBulkDocs(docs)
-		Log("Pusher saved doc %q", doc.Id)
+		Log("Pusher #%d saved doc %q", seqId, doc.Id)
 		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
 }
 
-const MaxRevsToGetInBulk = 50
-
-func RevsIterator(ids []string) <-chan map[string][]map[string]string {
-	ch := make(chan map[string][]map[string]string)
-
-	numRevsToGetInBulk := float64(len(ids))
-	numRevsGotten := 0
-	go func() {
-		for numRevsToGetInBulk > 0 {
-			bulkSize := int(math.Min(numRevsToGetInBulk, MaxRevsToGetInBulk))
-			docs := []map[string]string{}
-			for _, id := range ids[numRevsGotten : numRevsGotten+bulkSize] {
-				docs = append(docs, map[string]string{"id": id})
-			}
-			ch <- map[string][]map[string]string{"docs": docs}
-
-			numRevsGotten += bulkSize
-			numRevsToGetInBulk -= float64(bulkSize)
-		}
-		close(ch)
-	}()
-	return ch
-}
-
+// Max number of old revisions to pull when a user's puller first starts.
 const MaxFirstFetch = 200
 
-func readFeed(c *api.SyncGatewayClient, feedType, lastSeq string) string {
-	feed := c.GetChangesFeed(feedType, lastSeq)
-
-	newLastSeq := feed["last_seq"].(string)
-	results := feed["results"].([]interface{})
-	Log("Puller received %d changes since %q (now at %q):", len(results), lastSeq, newLastSeq)
+// Given a set of changes, downloads the associated revisions.
+func pullChanges(c *api.SyncGatewayClient, changes []*api.Change) (int, interface{}) {
 	docs := []api.BulkDocsEntry{}
-	for _, result := range results {
-		doc := result.(map[string]interface{})
-		docID := doc["id"].(string)
-		seq := doc["seq"].(string)
-		changes := doc["changes"].([]interface{})
-		change := changes[0].(map[string]interface{})
-		revID := change["rev"].(string)
-
-		docs = append(docs, api.BulkDocsEntry{ID: docID, Rev: revID})
-		Log("\t%s : %q / %q", seq, docID, revID)
+	var newLastSeq interface{}
+	for _, change := range changes {
+		newLastSeq = change.Seq
+		for _, changeItem := range change.Changes {
+			bulk := api.BulkDocsEntry{ID: change.ID, Rev: changeItem.Rev}
+			docs = append(docs, bulk)
+		}
 	}
 	if len(docs) == 1 {
-		c.GetSingleDoc(docs[0].ID, docs[0].Rev)
+		if !c.GetSingleDoc(docs[0].ID, docs[0].Rev) {
+			docs = nil
+		}
 	} else {
-		c.GetBulkDocs(docs)
+		if !c.GetBulkDocs(docs) {
+			docs = nil
+		}
 	}
-
-	return newLastSeq
+	return len(docs), newLastSeq
 }
 
-const CheckpointInverval = time.Duration(5000) * time.Millisecond
+// Delay between receiving first change and GETting the doc(s), to allow for batching.
+const FetchDelay = time.Duration(1000) * time.Millisecond
 
-func RunPuller(c *api.SyncGatewayClient, channel, name string, wg *sync.WaitGroup) {
+// Delay after saving docs before saving a checkpoint to the server.
+const CheckpointInterval = time.Duration(5000) * time.Millisecond
+
+func RunPuller(c *api.SyncGatewayClient, channel, name, feedType string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	lastSeq := fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
-	lastSeq = readFeed(c, "normal", lastSeq)
+	var lastSeq interface{} = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
+	changesFeed := c.GetChangesFeed(feedType, lastSeq)
+	Log("** Puller %s watching changes using %s feed...", name, feedType)
 
-	checkpointSeqId := int64(0)
+	var pendingChanges []*api.Change
+	var fetchTimer <-chan time.Time
+
+	var checkpointSeqId int64 = 0
+	var checkpointTimer <-chan time.Time
+
+outer:
 	for {
-		timer := time.AfterFunc(CheckpointInverval, func() {
+		select {
+		case change, ok := <-changesFeed:
+			// Received a change from the feed:
+			if !ok {
+				break outer
+			}
+			Log("Puller %s received %+v", name, *change)
+			pendingChanges = append(pendingChanges, change)
+			if fetchTimer == nil {
+				fetchTimer = time.NewTimer(FetchDelay).C
+			}
+		case <-fetchTimer:
+			// Time to get documents from the server:
+			fetchTimer = nil
+			var nDocs int
+			nDocs, lastSeq = pullChanges(c, pendingChanges)
+			pendingChanges = nil
+			Log("Puller %s read %d docs", name, nDocs)
+			if nDocs > 0 && checkpointTimer == nil {
+				checkpointTimer = time.NewTimer(CheckpointInterval).C
+			}
+		case <-checkpointTimer:
+			// Time to save a checkpoint:
+			checkpointTimer = nil
 			checkpoint := api.Checkpoint{LastSequence: lastSeq}
-			chechpointHash := fmt.Sprintf("%s-%s", name, Hash(strconv.FormatInt(checkpointSeqId, 10)))
-			c.SaveCheckpoint(chechpointHash, checkpoint)
+			checkpointHash := fmt.Sprintf("%s-%s", name, Hash(strconv.FormatInt(checkpointSeqId, 10)))
+			c.SaveCheckpoint(checkpointHash, checkpoint)
 			checkpointSeqId += 1
-			Log("Puller saved remote checkpoint")
-		})
-		lastSeq = readFeed(c, "longpoll", lastSeq)
-		timer.Stop()
+			Log("Puller %s saved remote checkpoint", name)
+		}
 	}
 }

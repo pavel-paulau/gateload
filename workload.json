@@ -6,5 +6,6 @@
 	"RunTimeMs": 7200000,
 	"SleepTimeMs": 10000,
 	"NumPullers": 700,
-	"NumPushers": 300
+	"NumPushers": 300,
+	"FeedType": "continuous"
 }

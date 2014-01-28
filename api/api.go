@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -31,10 +32,10 @@ func (c *RestClient) DoRaw(req *http.Request) *http.Response {
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		log.Printf("WARNING: Network error: %v", err)
+		log.Printf("WARNING: Network error: %v for %s", err, req.URL)
 		return nil
 	} else if resp.StatusCode >= 300 {
-		log.Printf("WARNING: HTTP error: Status %d %s", resp.StatusCode, resp.Status)
+		log.Printf("WARNING: HTTP error: %s for %s", resp.Status, req.URL)
 		return nil
 	}
 	return resp
@@ -140,7 +141,7 @@ type BulkDocsEntry struct {
 	Rev string
 }
 
-func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) {
+func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
 	body := map[string][]BulkDocsEntry{"docs": docs}
 	b, _ := json.Marshal(body)
 	j := bytes.NewReader(b)
@@ -149,23 +150,23 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) {
 
 	resp := c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
 	if resp == nil {
-		return
+		return false
 	}
 	defer resp.Body.Close()
 	_, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		log.Panicf("Can't read HTTP response: %v", err)
-		return
 	}
+	return true
 }
 
-func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) {
+func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) bool {
 	uri := fmt.Sprintf("%s/%s", c.baseURI, docid)
 	if revid != "" {
 		uri += "?rev=" + revid
 	}
 	req, _ := http.NewRequest("GET", uri, nil)
-	c.client.Do(req)
+	return c.client.Do(req) != nil
 }
 
 func (c *SyncGatewayClient) GetLastSeq() float64 {
@@ -176,16 +177,82 @@ func (c *SyncGatewayClient) GetLastSeq() float64 {
 	return resp["committed_update_seq"].(float64)
 }
 
-func (c *SyncGatewayClient) GetChangesFeed(feedType, since string) map[string]interface{} {
+type Change struct {
+	Seq     interface{}
+	ID      string
+	Changes []ChangeRev
+}
+
+type ChangeRev struct {
+	Rev string
+}
+
+func (c *SyncGatewayClient) changesFeedRequest(feedType, since interface{}) *http.Request {
 	var uri string
 	uri = fmt.Sprintf("%s/_changes?feed=%s&heartbeat=300000&style=all_docs&since=%s", c.baseURI, feedType, since)
 	req, _ := http.NewRequest("GET", uri, nil)
+	return req
+}
 
-	return c.client.Do(req)
+func (c *SyncGatewayClient) GetChangesFeed(feedType string, since interface{}) <-chan *Change {
+	if feedType == "continuous" {
+		return c.runContinuousChangesFeed(since)
+	}
+
+	out := make(chan *Change)
+	go func() {
+		defer close(out)
+		for {
+			feed := c.client.Do(c.changesFeedRequest(feedType, since))
+			results := feed["results"].([]interface{})
+			for _, result := range results {
+				doc := result.(map[string]interface{})
+				var change Change
+				change.ID = doc["id"].(string)
+				change.Seq = doc["seq"]
+				for _, item := range doc["changes"].([]interface{}) {
+					dict := item.(map[string]interface{})
+					revID := dict["rev"].(string)
+					change.Changes = append(change.Changes, ChangeRev{Rev: revID})
+				}
+				out <- &change
+			}
+			since = feed["last_seq"]
+			if feedType != "longpoll" {
+				break
+			}
+		}
+	}()
+	return out
+}
+
+func (c *SyncGatewayClient) runContinuousChangesFeed(since interface{}) <-chan *Change {
+	response := c.client.DoRaw(c.changesFeedRequest("continuous", since))
+	if response == nil {
+		return nil
+	}
+	out := make(chan *Change)
+	go func() {
+		defer close(out)
+		defer response.Body.Close()
+		scanner := bufio.NewScanner(response.Body)
+		for scanner.Scan() {
+			if line := scanner.Bytes(); len(line) > 0 {
+				var change Change
+				if err := json.Unmarshal(line, &change); err != nil {
+					log.Printf("Warning: Unparseable line from continuous _changes: %s", scanner.Bytes())
+					continue
+				}
+				out <- &change
+			}
+		}
+		log.Printf("Warning: Continuous changes feed closed with error %v", scanner.Err())
+	}()
+	return out
 }
 
 type Checkpoint struct {
-	LastSequence string `json:"lastSequence"`
+	LastSequence interface{} `json:"lastSequence"`
 }
 
 func (c *SyncGatewayClient) SaveCheckpoint(id string, checkpoint Checkpoint) {
