@@ -137,8 +137,8 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
 }
 
 type BulkDocsEntry struct {
-	ID  string
-	Rev string
+	ID  string `json:"id"`
+	Rev string `json:"rev"`
 }
 
 func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
