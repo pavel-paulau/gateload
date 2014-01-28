@@ -42,7 +42,7 @@ func UserIterator(NumPullers, NumPushers, UserOffset int) <-chan *User {
 
 	ch := make(chan *User)
 	go func() {
-		for currUser := UserOffset; currUser < numUsers; currUser++ {
+		for currUser := UserOffset; currUser < numUsers+UserOffset; currUser++ {
 			currChannel := currUser / ChannelQuota
 			ch <- &User{
 				SeqId:   currUser,
