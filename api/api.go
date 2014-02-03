@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -92,6 +94,7 @@ type Doc struct {
 	Channels  []string               `json:"channels"`
 	Data      map[string]string      `json:"data"`
 	Revisions map[string]interface{} `json:"_revisions"`
+	Created   time.Time              `json:"created"`
 }
 
 func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
@@ -160,7 +163,6 @@ type BulkDocsEntry struct {
 }
 
 func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
-
 	if OperationCallback != nil {
 		defer func(t time.Time) { OperationCallback("GetBulkDocs", t, nil) }(time.Now())
 	}
@@ -176,10 +178,19 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
 		return false
 	}
 	defer resp.Body.Close()
-	_, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Panicf("Can't read HTTP response: %v", err)
+	_, attrs, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	mr := multipart.NewReader(resp.Body, attrs["boundary"])
+	part, err := mr.NextPart()
+	for part != nil && err == nil {
+		var data map[string]interface{}
+		decoder := json.NewDecoder(part)
+		err := decoder.Decode(&data)
+		if err == nil {
+			logPushToSubscriberTime(data)
+		}
+		part, err = mr.NextPart()
 	}
+
 	return true
 }
 
@@ -194,7 +205,24 @@ func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) bool {
 		uri += "?rev=" + revid
 	}
 	req, _ := http.NewRequest("GET", uri, nil)
-	return c.client.Do(req) != nil
+	res := c.client.Do(req)
+	if res != nil {
+		logPushToSubscriberTime(res)
+	}
+	return res != nil
+}
+
+func logPushToSubscriberTime(doc map[string]interface{}) {
+	created, ok := doc["created"]
+	if ok {
+		createdString, ok := created.(string)
+		if ok {
+			createdTime, err := time.Parse(time.RFC3339, createdString)
+			if err == nil {
+				OperationCallback("PushToSubscriber", createdTime, nil)
+			}
+		}
+	}
 }
 
 func (c *SyncGatewayClient) GetLastSeq() float64 {

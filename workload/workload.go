@@ -121,6 +121,7 @@ func RunPusher(c *api.SyncGatewayClient, channel string, size int, dist DocSizeD
 			doc.Id: []string{doc.Rev},
 		}
 		c.PostRevsDiff(revsDiff)
+		doc.Created = time.Now()
 		docs := map[string]interface{}{
 			"docs":      []api.Doc{doc},
 			"new_edits": false,
