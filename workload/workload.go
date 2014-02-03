@@ -73,32 +73,29 @@ func RandString(key string, expectedLength int) string {
 	return randString
 }
 
-func DocIterator(start, end int, size int, channel string) <-chan api.Doc {
-	ch := make(chan api.Doc)
-	go func() {
-		for i := start; i < end; i++ {
-			docid := Hash(strconv.FormatInt(int64(i), 10))
-			rev := Hash(strconv.FormatInt(int64(i*i), 10))
-			doc := api.Doc{
-				Id:        docid,
-				Rev:       fmt.Sprintf("1-%s", rev),
-				Channels:  []string{channel},
-				Data:      map[string]string{docid: RandString(docid, size)},
-				Revisions: map[string]interface{}{"ids": []string{rev}, "start": 1},
-			}
-			ch <- doc
-		}
-		close(ch)
-	}()
-	return ch
-}
-
 const DocsPerUser = 1000000
 
-func RunPusher(c *api.SyncGatewayClient, channel string, size, seqId, sleepTime int, wg *sync.WaitGroup) {
+func RunPusher(c *api.SyncGatewayClient, channel string, size int, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	for doc := range DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, size, channel) {
+	// if config contains DocSize, always generate this fixed document size
+	if size != 0 {
+		dist = DocSizeDistribution{
+			&DocSizeDistributionElement{
+				Prob:    100,
+				MinSize: size,
+				MaxSize: size,
+			},
+		}
+	}
+
+	docSizeGenerator, err := NewDocSizeGenerator(dist)
+	if err != nil {
+		Log("Error starting docuemnt pusher: %v", err)
+		return
+	}
+
+	for doc := range DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, docSizeGenerator, channel) {
 		revsDiff := map[string][]string{
 			doc.Id: []string{doc.Rev},
 		}

@@ -25,7 +25,7 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 
 	log.Printf("Starting new %s (%s) - %v", user.Type, user.Name, user.Cookie)
 	if user.Type == "pusher" {
-		go workload.RunPusher(&c, user.Channel, config.DocSize, user.SeqId, config.SleepTimeMs, wg)
+		go workload.RunPusher(&c, user.Channel, config.DocSize, config.DocSizeDistribution, user.SeqId, config.SleepTimeMs, wg)
 	} else {
 		go workload.RunPuller(&c, user.Channel, user.Name, config.FeedType, wg)
 	}

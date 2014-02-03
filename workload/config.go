@@ -8,19 +8,20 @@ import (
 )
 
 type Config struct {
-	Hostname         string
-	Database         string
-	NumPullers       int
-	NumPushers       int
-	UserOffset       int
-	DocSize          int
-	RampUpIntervalMs int
-	SleepTimeMs      int
-	RunTimeMs        int
-	FeedType         string // Type of _changes feed: "continuous" or "longpoll"
-	SerieslyHostname string
-	SerieslyDatabase string
-	Verbose          bool
+	Hostname            string
+	Database            string
+	NumPullers          int
+	NumPushers          int
+	UserOffset          int
+	DocSize             int
+	DocSizeDistribution DocSizeDistribution
+	RampUpIntervalMs    int
+	SleepTimeMs         int
+	RunTimeMs           int
+	FeedType            string // Type of _changes feed: "continuous" or "longpoll"
+	SerieslyHostname    string
+	SerieslyDatabase    string
+	Verbose             bool
 }
 
 var DefaultConfig = Config{
