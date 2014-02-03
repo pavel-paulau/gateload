@@ -8,28 +8,6 @@ import (
 	"github.com/couchbaselabs/gateload/api"
 )
 
-// the existing doc iterator
-
-// func DocIterator(start, end int, size int, channel string) <-chan api.Doc {
-// 	ch := make(chan api.Doc)
-// 	go func() {
-// 		for i := start; i < end; i++ {
-// 			docid := Hash(strconv.FormatInt(int64(i), 10))
-// 			rev := Hash(strconv.FormatInt(int64(i*i), 10))
-// 			doc := api.Doc{
-// 				Id:        docid,
-// 				Rev:       fmt.Sprintf("1-%s", rev),
-// 				Channels:  []string{channel},
-// 				Data:      map[string]string{docid: RandString(docid, size)},
-// 				Revisions: map[string]interface{}{"ids": []string{rev}, "start": 1},
-// 			}
-// 			ch <- doc
-// 		}
-// 		close(ch)
-// 	}()
-// 	return ch
-// }
-
 type DocSizeDistributionElement struct {
 	Prob    int
 	MinSize int
