@@ -3,6 +3,7 @@ package workload
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"expvar"
 	"fmt"
 	"log"
 	"math"
@@ -13,7 +14,26 @@ import (
 	"time"
 
 	"github.com/couchbaselabs/gateload/api"
+
+	"github.com/samuel/go-metrics/metrics"
 )
+
+var glExpvars = expvar.NewMap("gateload")
+
+var (
+	opshistos = map[string]metrics.Histogram{}
+	histosMu  = sync.Mutex{}
+
+	expOpsHistos *expvar.Map
+)
+
+func init() {
+	api.OperationCallback = recordHTTPClientStat
+
+	expOpsHistos = &expvar.Map{}
+	expOpsHistos.Init()
+	glExpvars.Set("ops", expOpsHistos)
+}
 
 func Log(fmt string, args ...interface{}) {
 	if Verbose {
@@ -78,6 +98,7 @@ const DocsPerUser = 1000000
 func RunPusher(c *api.SyncGatewayClient, channel string, size int, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	glExpvars.Add("user_active", 1)
 	// if config contains DocSize, always generate this fixed document size
 	if size != 0 {
 		dist = DocSizeDistribution{
@@ -108,6 +129,7 @@ func RunPusher(c *api.SyncGatewayClient, channel string, size int, dist DocSizeD
 		Log("Pusher #%d saved doc %q", seqId, doc.Id)
 		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
+	glExpvars.Add("user_active", -1)
 }
 
 // Max number of old revisions to pull when a user's puller first starts.
@@ -144,6 +166,8 @@ const CheckpointInterval = time.Duration(5000) * time.Millisecond
 
 func RunPuller(c *api.SyncGatewayClient, channel, name, feedType string, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	glExpvars.Add("user_active", 1)
 
 	var lastSeq interface{} = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
 	changesFeed := c.GetChangesFeed(feedType, lastSeq)
@@ -188,4 +212,27 @@ outer:
 			Log("Puller %s saved remote checkpoint", name)
 		}
 	}
+
+	glExpvars.Add("user_active", -1)
+}
+
+func clientHTTPHisto(name string) metrics.Histogram {
+	histosMu.Lock()
+	defer histosMu.Unlock()
+	rv, ok := opshistos[name]
+	if !ok {
+		rv = metrics.NewBiasedHistogram()
+		opshistos[name] = rv
+
+		expOpsHistos.Set(name, &metrics.HistogramExport{rv,
+			[]float64{0.25, 0.5, 0.75, 0.90, 0.99},
+			[]string{"p25", "p50", "p75", "p90", "p99"}})
+	}
+	return rv
+}
+
+func recordHTTPClientStat(opname string, start time.Time, err error) {
+	duration := time.Since(start)
+	histo := clientHTTPHisto(opname)
+	histo.Update(int64(duration))
 }

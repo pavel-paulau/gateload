@@ -9,12 +9,15 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type RestClient struct {
 	client *http.Client
 	cookie interface{}
 }
+
+var OperationCallback func(op string, start time.Time, err error)
 
 func (c *RestClient) DoRaw(req *http.Request) *http.Response {
 	defer func() {
@@ -92,6 +95,11 @@ type Doc struct {
 }
 
 func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
+
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("PutSingleDoc", t, nil) }(time.Now())
+	}
+
 	b, _ := json.Marshal(doc)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/%s?new_edits=false", c.baseURI, docid)
@@ -101,6 +109,11 @@ func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
 }
 
 func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
+
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("PostRevsDiff", t, nil) }(time.Now())
+	}
+
 	b, _ := json.Marshal(revsDiff)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_revs_diff", c.baseURI)
@@ -119,6 +132,11 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 }
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
+
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("PostBulkDocs", t, nil) }(time.Now())
+	}
+
 	b, _ := json.Marshal(docs)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
@@ -142,6 +160,11 @@ type BulkDocsEntry struct {
 }
 
 func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
+
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("GetBulkDocs", t, nil) }(time.Now())
+	}
+
 	body := map[string][]BulkDocsEntry{"docs": docs}
 	b, _ := json.Marshal(body)
 	j := bytes.NewReader(b)
@@ -161,6 +184,11 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
 }
 
 func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) bool {
+
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("GetSingle", t, nil) }(time.Now())
+	}
+
 	uri := fmt.Sprintf("%s/%s", c.baseURI, docid)
 	if revid != "" {
 		uri += "?rev=" + revid
@@ -170,6 +198,10 @@ func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) bool {
 }
 
 func (c *SyncGatewayClient) GetLastSeq() float64 {
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("GetLastSeq", t, nil) }(time.Now())
+	}
+
 	uri := fmt.Sprintf("%s/", c.baseURI)
 	req, _ := http.NewRequest("GET", uri, nil)
 
@@ -256,6 +288,11 @@ type Checkpoint struct {
 }
 
 func (c *SyncGatewayClient) SaveCheckpoint(id string, checkpoint Checkpoint) {
+
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("SaveCheckpoint", t, nil) }(time.Now())
+	}
+
 	b, _ := json.Marshal(checkpoint)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_local/%s", c.baseURI, id)
@@ -271,6 +308,11 @@ type UserAuth struct {
 }
 
 func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
+
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("AddUser", t, nil) }(time.Now())
+	}
+
 	b, _ := json.Marshal(auth)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_user/%s", c.baseAdminURI, name)
@@ -295,6 +337,11 @@ type Session struct {
 }
 
 func (c *SyncGatewayClient) CreateSession(name string, session Session) http.Cookie {
+
+	if OperationCallback != nil {
+		defer func(t time.Time) { OperationCallback("CreateSession", t, nil) }(time.Now())
+	}
+
 	b, _ := json.Marshal(session)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_session", c.baseAdminURI)

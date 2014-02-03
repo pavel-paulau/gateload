@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"runtime"
 	"sync"
 	"time"
@@ -33,6 +34,9 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	// start up an http server, just to serve up expvars
+	go http.ListenAndServe(":9876", nil)
 
 	var config workload.Config
 	workload.ReadConfig(&config)
