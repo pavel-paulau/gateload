@@ -137,7 +137,7 @@ func RunPusher(c *api.SyncGatewayClient, channel string, size int, dist DocSizeD
 const MaxFirstFetch = 200
 
 // Given a set of changes, downloads the associated revisions.
-func pullChanges(c *api.SyncGatewayClient, changes []*api.Change) (int, interface{}) {
+func pullChanges(c *api.SyncGatewayClient, changes []*api.Change, wakeup time.Time) (int, interface{}) {
 	docs := []api.BulkDocsEntry{}
 	var newLastSeq interface{}
 	for _, change := range changes {
@@ -148,11 +148,11 @@ func pullChanges(c *api.SyncGatewayClient, changes []*api.Change) (int, interfac
 		}
 	}
 	if len(docs) == 1 {
-		if !c.GetSingleDoc(docs[0].ID, docs[0].Rev) {
+		if !c.GetSingleDoc(docs[0].ID, docs[0].Rev, wakeup) {
 			docs = nil
 		}
 	} else {
-		if !c.GetBulkDocs(docs) {
+		if !c.GetBulkDocs(docs, wakeup) {
 			docs = nil
 		}
 	}
@@ -169,6 +169,7 @@ func RunPuller(c *api.SyncGatewayClient, channel, name, feedType string, wg *syn
 	defer wg.Done()
 
 	glExpvars.Add("user_active", 1)
+	var wakeupTime = time.Now()
 
 	var lastSeq interface{} = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
 	changesFeed := c.GetChangesFeed(feedType, lastSeq)
@@ -197,7 +198,7 @@ outer:
 			// Time to get documents from the server:
 			fetchTimer = nil
 			var nDocs int
-			nDocs, lastSeq = pullChanges(c, pendingChanges)
+			nDocs, lastSeq = pullChanges(c, pendingChanges, wakeupTime)
 			pendingChanges = nil
 			Log("Puller %s read %d docs", name, nDocs)
 			if nDocs > 0 && checkpointTimer == nil {
@@ -208,7 +209,8 @@ outer:
 			checkpointTimer = nil
 			checkpoint := api.Checkpoint{LastSequence: lastSeq}
 			checkpointHash := fmt.Sprintf("%s-%s", name, Hash(strconv.FormatInt(checkpointSeqId, 10)))
-			c.SaveCheckpoint(checkpointHash, checkpoint)
+			// save checkpoint asynchronously
+			go c.SaveCheckpoint(checkpointHash, checkpoint)
 			checkpointSeqId += 1
 			Log("Puller %s saved remote checkpoint", name)
 		}

@@ -162,7 +162,7 @@ type BulkDocsEntry struct {
 	Rev string `json:"rev"`
 }
 
-func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
+func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) bool {
 	if OperationCallback != nil {
 		defer func(t time.Time) { OperationCallback("GetBulkDocs", t, nil) }(time.Now())
 	}
@@ -186,7 +186,7 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
 		decoder := json.NewDecoder(part)
 		err := decoder.Decode(&data)
 		if err == nil {
-			logPushToSubscriberTime(data)
+			logPushToSubscriberTime(data, wakeup)
 		}
 		part, err = mr.NextPart()
 	}
@@ -194,7 +194,7 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry) bool {
 	return true
 }
 
-func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) bool {
+func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string, wakeup time.Time) bool {
 
 	if OperationCallback != nil {
 		defer func(t time.Time) { OperationCallback("GetSingle", t, nil) }(time.Now())
@@ -207,19 +207,23 @@ func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string) bool {
 	req, _ := http.NewRequest("GET", uri, nil)
 	res := c.client.Do(req)
 	if res != nil {
-		logPushToSubscriberTime(res)
+		logPushToSubscriberTime(res, wakeup)
 	}
 	return res != nil
 }
 
-func logPushToSubscriberTime(doc map[string]interface{}) {
+func logPushToSubscriberTime(doc map[string]interface{}, wakeup time.Time) {
 	created, ok := doc["created"]
 	if ok {
 		createdString, ok := created.(string)
 		if ok {
 			createdTime, err := time.Parse(time.RFC3339, createdString)
 			if err == nil {
-				OperationCallback("PushToSubscriber", createdTime, nil)
+				if wakeup.After(createdTime) {
+					OperationCallback("PushToSubscriberBackfill", wakeup, nil)
+				} else {
+					OperationCallback("PushToSubscriberInteractive", createdTime, nil)
+				}
 			}
 		}
 	}
