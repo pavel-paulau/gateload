@@ -82,8 +82,9 @@ func main() {
 	// close the pending users channel to free that routine
 	close(pendingUsers)
 
-	channelRampUpDelayMs := time.Duration(config.RampUpIntervalMs/config.ChannelActiveUsers) * time.Millisecond
-	log.Printf("channelRampUpDelay is %v for %d channels", channelRampUpDelayMs, config.ChannelActiveUsers)
+	numChannels := (config.NumPullers + config.NumPushers) / config.ChannelActiveUsers
+	channelRampUpDelayMs := time.Duration(config.RampUpIntervalMs/numChannels) * time.Millisecond
+	log.Printf("channelRampUpDelay is %v for %d channels", channelRampUpDelayMs, numChannels)
 	wg := sync.WaitGroup{}
 	channel := ""
 	for _, user := range users {
