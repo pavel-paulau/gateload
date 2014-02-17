@@ -174,12 +174,14 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 			// timer went off, transition modes
 			timeOffset := time.Since(start)
 			if online {
+				glExpvars.Add("user_awake", 1)
 				online = false
 				scheduleIndex++
 				if scheduleIndex < len(schedule) {
 					timer = time.NewTimer(schedule[scheduleIndex].start - timeOffset)
 				}
 			} else {
+				glExpvars.Add("user_awake", -1)
 				online = true
 				if schedule[scheduleIndex].end != -1 {
 					timer = time.NewTimer(schedule[scheduleIndex].end - timeOffset)

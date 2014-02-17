@@ -46,12 +46,14 @@ func main() {
 	admin.Init(config.Hostname, config.Database)
 
 	pendingUsers := make(chan *workload.User)
-	users := []*workload.User{}
+	users := make([]*workload.User, config.NumPullers+config.NumPushers)
 
 	// start a routine to place pending users into array
 	go func() {
 		for pendingUser := range pendingUsers {
-			users = append(users, pendingUser)
+
+			// users = append(users, pendingUser)
+			users[pendingUser.SeqId] = pendingUser
 		}
 		log.Printf("pending users routine done")
 	}()
@@ -80,8 +82,19 @@ func main() {
 	// close the pending users channel to free that routine
 	close(pendingUsers)
 
+	channelRampUpDelayMs := time.Duration(config.RampUpIntervalMs/config.ChannelActiveUsers) * time.Millisecond
+	log.Printf("channelRampUpDelay is %v for %d channels", channelRampUpDelayMs, config.ChannelActiveUsers)
 	wg := sync.WaitGroup{}
+	channel := ""
 	for _, user := range users {
+		nextChannel := user.Channel
+		if channel != nextChannel {
+			if channel != "" {
+				time.Sleep(channelRampUpDelayMs)
+			}
+			log.Printf("starting new channel: %s", nextChannel)
+			channel = nextChannel
+		}
 		wg := sync.WaitGroup{}
 		go runUser(user, config, &wg)
 		wg.Add(1)
