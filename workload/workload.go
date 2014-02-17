@@ -366,8 +366,8 @@ func clientHTTPHisto(name string) metrics.Histogram {
 		opshistos[name] = rv
 
 		expOpsHistos.Set(name, &metrics.HistogramExport{rv,
-			[]float64{0.25, 0.5, 0.75, 0.90, 0.99},
-			[]string{"p25", "p50", "p75", "p90", "p99"}})
+			[]float64{0.25, 0.5, 0.75, 0.90, 0.95, 0.99},
+			[]string{"p25", "p50", "p75", "p90", "p95", "p99"}})
 	}
 	return rv
 }
