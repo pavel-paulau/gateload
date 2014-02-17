@@ -26,10 +26,11 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 
 	log.Printf("Starting new %s (%s) - %v", user.Type, user.Name, user.Cookie)
 	if user.Type == "pusher" {
-		go workload.RunPusher(&c, user.Channel, config.DocSize, config.DocSizeDistribution, user.SeqId, config.SleepTimeMs, wg)
+		go workload.RunNewPusher(user.Schedule, user.Name, &c, user.Channel, config.DocSize, config.DocSizeDistribution, user.SeqId, config.SleepTimeMs, wg)
 	} else {
-		go workload.RunPuller(&c, user.Channel, user.Name, config.FeedType, wg)
+		go workload.RunNewPuller(user.Schedule, &c, user.Channel, user.Name, config.FeedType, wg)
 	}
+
 }
 
 func main() {
@@ -55,8 +56,9 @@ func main() {
 		log.Printf("pending users routine done")
 	}()
 
+	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
 	// use a fixed number of workers to create the users/sessions
-	userIterator := workload.UserIterator(config.NumPullers, config.NumPushers, config.UserOffset)
+	userIterator := workload.UserIterator(config.NumPullers, config.NumPushers, config.UserOffset, config.ChannelActiveUsers, config.ChannelConcurrentUsers, config.MinUserOffTimeMs, config.MaxUserOffTimeMs, rampUpDelay, config.RunTimeMs)
 	adminWg := sync.WaitGroup{}
 	worker := func() {
 		defer adminWg.Done()
@@ -78,14 +80,11 @@ func main() {
 	// close the pending users channel to free that routine
 	close(pendingUsers)
 
-	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
-	rampUpDelayMs := time.Duration(rampUpDelay) * time.Millisecond
 	wg := sync.WaitGroup{}
 	for _, user := range users {
 		wg := sync.WaitGroup{}
 		go runUser(user, config, &wg)
 		wg.Add(1)
-		time.Sleep(rampUpDelayMs)
 	}
 
 	if config.RunTimeMs > 0 {

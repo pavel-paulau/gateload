@@ -45,11 +45,10 @@ type User struct {
 	SeqId               int
 	Type, Name, Channel string
 	Cookie              http.Cookie
+	Schedule            RunSchedule
 }
 
-const ChannelQuota = 40
-
-func UserIterator(NumPullers, NumPushers, UserOffset int) <-chan *User {
+func UserIterator(NumPullers, NumPushers, UserOffset, ChannelActiveUsers, ChannelConcurrentUsers, MinUserOffTimeMs, MaxUserOffTimeMs, RampUpDelay, RunTimeMs int) <-chan *User {
 	numUsers := NumPullers + NumPushers
 	usersTypes := make([]string, 0, numUsers)
 	for i := 0; i < NumPullers; i++ {
@@ -62,14 +61,26 @@ func UserIterator(NumPullers, NumPushers, UserOffset int) <-chan *User {
 
 	ch := make(chan *User)
 	go func() {
+		lastChannel := -1
+		channelUserNum := 0
+		var schedules []RunSchedule
 		for currUser := UserOffset; currUser < numUsers+UserOffset; currUser++ {
-			currChannel := currUser / ChannelQuota
-			ch <- &User{
-				SeqId:   currUser,
-				Type:    usersTypes[randSeq[currUser-UserOffset]],
-				Name:    fmt.Sprintf("user-%v", currUser),
-				Channel: fmt.Sprintf("channel-%v", currChannel),
+			currChannel := currUser / ChannelActiveUsers
+			if currChannel != lastChannel {
+				scheduleBuilder := NewScheduleBuilder(ChannelActiveUsers, ChannelConcurrentUsers, time.Duration(RampUpDelay)*time.Millisecond, time.Duration(MinUserOffTimeMs)*time.Millisecond, time.Duration(MaxUserOffTimeMs)*time.Millisecond, time.Duration(RunTimeMs)*time.Millisecond)
+				schedules = scheduleBuilder.BuildSchedules()
+
+				lastChannel = currChannel
+				channelUserNum = 0
 			}
+			ch <- &User{
+				SeqId:    currUser,
+				Type:     usersTypes[randSeq[currUser-UserOffset]],
+				Name:     fmt.Sprintf("user-%v", currUser),
+				Channel:  fmt.Sprintf("channel-%v", currChannel),
+				Schedule: schedules[channelUserNum],
+			}
+			channelUserNum++
 		}
 		close(ch)
 	}()
@@ -94,6 +105,124 @@ func RandString(key string, expectedLength int) string {
 }
 
 const DocsPerUser = 1000000
+
+func RunScheduleFollower(schedule RunSchedule, name string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	online := false
+	scheduleIndex := 0
+	start := time.Now()
+	timer := time.NewTimer(schedule[scheduleIndex].start)
+
+	for {
+		select {
+		case <-timer.C:
+			// timer went off, transition modes
+			timeOffset := time.Since(start)
+			if online {
+				online = false
+				scheduleIndex++
+				if scheduleIndex < len(schedule) {
+					timer = time.NewTimer(schedule[scheduleIndex].start - timeOffset)
+				}
+			} else {
+				online = true
+				if schedule[scheduleIndex].end != -1 {
+					timer = time.NewTimer(schedule[scheduleIndex].end - timeOffset)
+				}
+			}
+		default:
+			//log.Printf("client %s, online: %v", name, online)
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+
+}
+
+func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, channel string, size int, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	glExpvars.Add("user_active", 1)
+	// if config contains DocSize, always generate this fixed document size
+	if size != 0 {
+		dist = DocSizeDistribution{
+			&DocSizeDistributionElement{
+				Prob:    100,
+				MinSize: size,
+				MaxSize: size,
+			},
+		}
+	}
+
+	docSizeGenerator, err := NewDocSizeGenerator(dist)
+	if err != nil {
+		Log("Error starting docuemnt pusher: %v", err)
+		return
+	}
+
+	docIterator := DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, docSizeGenerator, channel)
+	docsToSend := 0
+
+	online := false
+	scheduleIndex := 0
+	start := time.Now()
+	timer := time.NewTimer(schedule[scheduleIndex].start)
+
+	for {
+		select {
+		case <-timer.C:
+			// timer went off, transition modes
+			timeOffset := time.Since(start)
+			if online {
+				online = false
+				scheduleIndex++
+				if scheduleIndex < len(schedule) {
+					timer = time.NewTimer(schedule[scheduleIndex].start - timeOffset)
+				}
+			} else {
+				online = true
+				if schedule[scheduleIndex].end != -1 {
+					timer = time.NewTimer(schedule[scheduleIndex].end - timeOffset)
+				}
+			}
+		default:
+			docsToSend++
+			if online {
+				//Log("Pusher online sending %d", docsToSend)
+				// generage docs
+				docs := make([]api.Doc, docsToSend)
+				for i := 0; i < docsToSend; i++ {
+					nextDoc := <-docIterator
+					docs[i] = nextDoc
+				}
+				// send revs diff
+				revsDiff := map[string][]string{}
+				for _, doc := range docs {
+					revsDiff[doc.Id] = []string{doc.Rev}
+				}
+
+				c.PostRevsDiff(revsDiff)
+				// set the creation time in docs
+				now := time.Now()
+				for _, doc := range docs {
+					doc.Created = now
+				}
+				// send bulk docs
+				bulkDocs := map[string]interface{}{
+					"docs":      docs,
+					"new_edits": false,
+				}
+				c.PostBulkDocs(bulkDocs)
+				Log("Pusher #%d saved %d docs", seqId, docsToSend)
+				docsToSend = 0
+			}
+			time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+		}
+	}
+
+	glExpvars.Add("user_active", -1)
+
+}
 
 func RunPusher(c *api.SyncGatewayClient, channel string, size int, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup) {
 	defer wg.Done()
@@ -165,6 +294,98 @@ const FetchDelay = time.Duration(1000) * time.Millisecond
 // Delay after saving docs before saving a checkpoint to the server.
 const CheckpointInterval = time.Duration(5000) * time.Millisecond
 
+func RunNewPuller(schedule RunSchedule, c *api.SyncGatewayClient, channel, name, feedType string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	glExpvars.Add("user_active", 1)
+	var wakeupTime = time.Now()
+
+	var lastSeq interface{} = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
+	var changesFeed <-chan *api.Change
+	var changesResponse *http.Response
+	var cancelChangesFeed *bool
+
+	var pendingChanges []*api.Change
+	var fetchTimer <-chan time.Time
+
+	var checkpointSeqId int64 = 0
+	var checkpointTimer <-chan time.Time
+
+	online := false
+	scheduleIndex := 0
+	start := time.Now()
+	timer := time.NewTimer(schedule[scheduleIndex].start)
+	Log("Puller %s first transition at %v", name, schedule[scheduleIndex].start)
+
+outer:
+	for {
+		select {
+		case <-timer.C:
+			// timer went off, transition modes
+			timeOffset := time.Since(start)
+			if online {
+				online = false
+				scheduleIndex++
+				if scheduleIndex < len(schedule) {
+					timer = time.NewTimer(schedule[scheduleIndex].start - timeOffset)
+					Log("Puller %s going offline, next off at %v", name, schedule[scheduleIndex].start-timeOffset)
+				} else {
+					Log("Puller %s going offline, for good", name)
+				}
+
+				// transitioning off, cancel the changes feed, nil our changes feed channel
+				*cancelChangesFeed = false
+				changesResponse.Body.Close()
+				changesFeed = nil
+				fetchTimer = nil
+				checkpointTimer = nil
+			} else {
+				online = true
+				if schedule[scheduleIndex].end != -1 {
+					timer = time.NewTimer(schedule[scheduleIndex].end - timeOffset)
+					Log("Puller %s going online, next on at %v", name, schedule[scheduleIndex].end-timeOffset)
+				} else {
+					Log("Puller %s going online, for good", name)
+				}
+
+				// transitioning on, start a changes feed
+				changesFeed, cancelChangesFeed, changesResponse = c.GetChangesFeed(feedType, lastSeq)
+				Log("** Puller %s watching changes using %s feed...", name, feedType)
+			}
+		case change, ok := <-changesFeed:
+			// Received a change from the feed:
+			if !ok {
+				break outer
+			}
+			Log("Puller %s received %+v", name, *change)
+			pendingChanges = append(pendingChanges, change)
+			if fetchTimer == nil {
+				fetchTimer = time.NewTimer(FetchDelay).C
+			}
+		case <-fetchTimer:
+			// Time to get documents from the server:
+			fetchTimer = nil
+			var nDocs int
+			nDocs, lastSeq = pullChanges(c, pendingChanges, wakeupTime)
+			pendingChanges = nil
+			Log("Puller %s read %d docs", name, nDocs)
+			if nDocs > 0 && checkpointTimer == nil {
+				checkpointTimer = time.NewTimer(CheckpointInterval).C
+			}
+		case <-checkpointTimer:
+			// Time to save a checkpoint:
+			checkpointTimer = nil
+			checkpoint := api.Checkpoint{LastSequence: lastSeq}
+			checkpointHash := fmt.Sprintf("%s-%s", name, Hash(strconv.FormatInt(checkpointSeqId, 10)))
+			// save checkpoint asynchronously
+			go c.SaveCheckpoint(checkpointHash, checkpoint)
+			checkpointSeqId += 1
+			Log("Puller %s saved remote checkpoint", name)
+		}
+	}
+
+}
+
 func RunPuller(c *api.SyncGatewayClient, channel, name, feedType string, wg *sync.WaitGroup) {
 	defer wg.Done()
 
@@ -172,7 +393,7 @@ func RunPuller(c *api.SyncGatewayClient, channel, name, feedType string, wg *syn
 	var wakeupTime = time.Now()
 
 	var lastSeq interface{} = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
-	changesFeed := c.GetChangesFeed(feedType, lastSeq)
+	changesFeed, _, _ := c.GetChangesFeed(feedType, lastSeq)
 	Log("** Puller %s watching changes using %s feed...", name, feedType)
 
 	var pendingChanges []*api.Change

@@ -258,15 +258,16 @@ func (c *SyncGatewayClient) changesFeedRequest(feedType, since interface{}) *htt
 	return req
 }
 
-func (c *SyncGatewayClient) GetChangesFeed(feedType string, since interface{}) <-chan *Change {
+func (c *SyncGatewayClient) GetChangesFeed(feedType string, since interface{}) (<-chan *Change, *bool, *http.Response) {
 	if feedType == "continuous" {
 		return c.runContinuousChangesFeed(since)
 	}
 
 	out := make(chan *Change)
+	running := true
 	go func() {
 		defer close(out)
-		for {
+		for running {
 			feed := c.client.Do(c.changesFeedRequest(feedType, since))
 			results := feed["results"].([]interface{})
 			for _, result := range results {
@@ -286,21 +287,26 @@ func (c *SyncGatewayClient) GetChangesFeed(feedType string, since interface{}) <
 				break
 			}
 		}
+		if !running {
+			log.Printf("Changes feed closed at client request")
+		}
 	}()
-	return out
+	return out, &running, nil
 }
 
-func (c *SyncGatewayClient) runContinuousChangesFeed(since interface{}) <-chan *Change {
+func (c *SyncGatewayClient) runContinuousChangesFeed(since interface{}) (<-chan *Change, *bool, *http.Response) {
+	running := true
 	response := c.client.DoRaw(c.changesFeedRequest("continuous", since))
 	if response == nil {
-		return nil
+		return nil, &running, nil
 	}
 	out := make(chan *Change)
 	go func() {
+		log.Printf("New continuous changes feed since: %v", since)
 		defer close(out)
 		defer response.Body.Close()
 		scanner := bufio.NewScanner(response.Body)
-		for scanner.Scan() {
+		for running && scanner.Scan() {
 			if line := scanner.Bytes(); len(line) > 0 {
 				var change Change
 				if err := json.Unmarshal(line, &change); err != nil {
@@ -310,9 +316,13 @@ func (c *SyncGatewayClient) runContinuousChangesFeed(since interface{}) <-chan *
 				out <- &change
 			}
 		}
-		log.Printf("Warning: Continuous changes feed closed with error %v", scanner.Err())
+		if running {
+			log.Printf("Warning: Continuous changes feed closed with error %v", scanner.Err())
+		} else {
+			log.Printf("Continuous changes feed closed at client request close")
+		}
 	}()
-	return out
+	return out, &running, response
 }
 
 type Checkpoint struct {
