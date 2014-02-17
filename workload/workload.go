@@ -206,8 +206,9 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 				c.PostRevsDiff(revsDiff)
 				// set the creation time in docs
 				now := time.Now()
-				for _, doc := range docs {
+				for i, doc := range docs {
 					doc.Created = now
+					docs[i] = doc
 				}
 				// send bulk docs
 				bulkDocs := map[string]interface{}{
@@ -224,44 +225,6 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 
 	glExpvars.Add("user_active", -1)
 
-}
-
-func RunPusher(c *api.SyncGatewayClient, channel string, size int, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	glExpvars.Add("user_active", 1)
-	// if config contains DocSize, always generate this fixed document size
-	if size != 0 {
-		dist = DocSizeDistribution{
-			&DocSizeDistributionElement{
-				Prob:    100,
-				MinSize: size,
-				MaxSize: size,
-			},
-		}
-	}
-
-	docSizeGenerator, err := NewDocSizeGenerator(dist)
-	if err != nil {
-		Log("Error starting docuemnt pusher: %v", err)
-		return
-	}
-
-	for doc := range DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, docSizeGenerator, channel) {
-		revsDiff := map[string][]string{
-			doc.Id: []string{doc.Rev},
-		}
-		c.PostRevsDiff(revsDiff)
-		doc.Created = time.Now()
-		docs := map[string]interface{}{
-			"docs":      []api.Doc{doc},
-			"new_edits": false,
-		}
-		c.PostBulkDocs(docs)
-		Log("Pusher #%d saved doc %q", seqId, doc.Id)
-		time.Sleep(time.Duration(sleepTime) * time.Millisecond)
-	}
-	glExpvars.Add("user_active", -1)
 }
 
 // Max number of old revisions to pull when a user's puller first starts.
@@ -354,6 +317,7 @@ outer:
 
 				// reset our wakeupTime to now
 				wakeupTime = time.Now()
+				Log("new wakupe time %v", wakeupTime)
 
 				// transitioning on, start a changes feed
 				changesFeed, cancelChangesFeed, changesResponse = c.GetChangesFeed(feedType, lastSeq)
@@ -391,60 +355,6 @@ outer:
 		}
 	}
 
-}
-
-func RunPuller(c *api.SyncGatewayClient, channel, name, feedType string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	glExpvars.Add("user_active", 1)
-	var wakeupTime = time.Now()
-
-	var lastSeq interface{} = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
-	changesFeed, _, _ := c.GetChangesFeed(feedType, lastSeq)
-	Log("** Puller %s watching changes using %s feed...", name, feedType)
-
-	var pendingChanges []*api.Change
-	var fetchTimer <-chan time.Time
-
-	var checkpointSeqId int64 = 0
-	var checkpointTimer <-chan time.Time
-
-outer:
-	for {
-		select {
-		case change, ok := <-changesFeed:
-			// Received a change from the feed:
-			if !ok {
-				break outer
-			}
-			Log("Puller %s received %+v", name, *change)
-			pendingChanges = append(pendingChanges, change)
-			if fetchTimer == nil {
-				fetchTimer = time.NewTimer(FetchDelay).C
-			}
-		case <-fetchTimer:
-			// Time to get documents from the server:
-			fetchTimer = nil
-			var nDocs int
-			nDocs, lastSeq = pullChanges(c, pendingChanges, wakeupTime)
-			pendingChanges = nil
-			Log("Puller %s read %d docs", name, nDocs)
-			if nDocs > 0 && checkpointTimer == nil {
-				checkpointTimer = time.NewTimer(CheckpointInterval).C
-			}
-		case <-checkpointTimer:
-			// Time to save a checkpoint:
-			checkpointTimer = nil
-			checkpoint := api.Checkpoint{LastSequence: lastSeq}
-			checkpointHash := fmt.Sprintf("%s-%s", name, Hash(strconv.FormatInt(checkpointSeqId, 10)))
-			// save checkpoint asynchronously
-			go c.SaveCheckpoint(checkpointHash, checkpoint)
-			checkpointSeqId += 1
-			Log("Puller %s saved remote checkpoint", name)
-		}
-	}
-
-	glExpvars.Add("user_active", -1)
 }
 
 func clientHTTPHisto(name string) metrics.Histogram {
