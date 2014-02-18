@@ -53,7 +53,7 @@ func main() {
 		for pendingUser := range pendingUsers {
 
 			// users = append(users, pendingUser)
-			users[pendingUser.SeqId] = pendingUser
+			users[pendingUser.SeqId-config.UserOffset] = pendingUser
 		}
 		log.Printf("pending users routine done")
 	}()
