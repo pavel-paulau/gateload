@@ -301,7 +301,9 @@ outer:
 
 				// transitioning off, cancel the changes feed, nil our changes feed channel
 				*cancelChangesFeed = false
-				changesResponse.Body.Close()
+				if changesResponse != nil {
+					changesResponse.Body.Close()
+				}
 				changesFeed = nil
 				fetchTimer = nil
 				checkpointTimer = nil
