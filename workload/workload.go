@@ -293,8 +293,12 @@ outer:
 				online = false
 				scheduleIndex++
 				if scheduleIndex < len(schedule) {
-					timer = time.NewTimer(schedule[scheduleIndex].start - timeOffset)
-					Log("Puller %s going offline, next off at %v", name, schedule[scheduleIndex].start-timeOffset)
+					nextOnIn := schedule[scheduleIndex].start - timeOffset
+					timer = time.NewTimer(nextOnIn)
+					Log("Puller %s going offline, next off at %v", name, nextOnIn)
+					if nextOnIn < 0 {
+						log.Printf("WARNING: negative timer")
+					}
 				} else {
 					Log("Puller %s going offline, for good", name)
 				}
@@ -311,15 +315,19 @@ outer:
 				glExpvars.Add("user_awake", 1)
 				online = true
 				if schedule[scheduleIndex].end != -1 {
-					timer = time.NewTimer(schedule[scheduleIndex].end - timeOffset)
-					Log("Puller %s going online, next on at %v", name, schedule[scheduleIndex].end-timeOffset)
+					nextOffIn := schedule[scheduleIndex].end - timeOffset
+					timer = time.NewTimer(nextOffIn)
+					Log("Puller %s going online, next on at %v", name, nextOffIn)
+					if nextOffIn < 0 {
+						log.Printf("WARNING: negative timer")
+					}
 				} else {
 					Log("Puller %s going online, for good", name)
 				}
 
 				// reset our wakeupTime to now
 				wakeupTime = time.Now()
-				Log("new wakupe time %v", wakeupTime)
+				Log("new wakeup time %v", wakeupTime)
 
 				// transitioning on, start a changes feed
 				changesFeed, cancelChangesFeed, changesResponse = c.GetChangesFeed(feedType, lastSeq)
