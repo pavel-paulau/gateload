@@ -85,7 +85,7 @@ func (c *SyncGatewayClient) Init(hostname, db string) {
 }
 
 func (c *SyncGatewayClient) Valid() bool {
-	req, _ := http.NewRequest("HEAD", c.baseURI, nil)
+	req, _ := http.NewRequest("HEAD", c.baseAdminURI, nil)
 	resp := c.client.DoRaw(req)
 	return resp != nil
 }
