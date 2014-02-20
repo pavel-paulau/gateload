@@ -44,6 +44,9 @@ func main() {
 
 	admin := api.SyncGatewayClient{}
 	admin.Init(config.Hostname, config.Database)
+	if !admin.Valid() {
+		log.Fatalf("unable to connect to sync_gateway, check the hostname and database")
+	}
 
 	pendingUsers := make(chan *workload.User)
 	users := make([]*workload.User, config.NumPullers+config.NumPushers)

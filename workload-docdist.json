@@ -2,25 +2,29 @@
 	"Hostname": "127.0.0.1",
 	"Database": "sync_gateway",
 	"DocSizeDistribution": [
-          {
-            "Prob": 20,
-            "MinSize": 32,
-            "MaxSize": 127
-          },
-          {
-            "Prob": 70,
-            "MinSize": 128,
-            "MaxSize": 1023
-          },
-          {
-            "Prob": 10,
-            "MinSize": 1024,
-            "MaxSize": 65536
-          }
-        ],
+		{
+			"Prob": 20,
+			"MinSize": 32,
+			"MaxSize": 127
+		},
+		{
+			"Prob": 70,
+			"MinSize": 128,
+			"MaxSize": 1023
+		},
+		{
+			"Prob": 10,
+			"MinSize": 1024,
+			"MaxSize": 65536
+		}
+	],
 	"RampUpIntervalMs": 3600000,
 	"RunTimeMs": 7200000,
 	"SleepTimeMs": 10000,
 	"NumPullers": 700,
-	"NumPushers": 300
+	"NumPushers": 300,
+	"ChannelActiveUsers": 40,
+	"ChannelConcurrentUsers": 32,
+	"MinUserOffTimeMs": 10000,
+	"MaxUserOffTimeMs": 60000
 }

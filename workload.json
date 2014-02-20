@@ -7,5 +7,9 @@
 	"SleepTimeMs": 10000,
 	"NumPullers": 700,
 	"NumPushers": 300,
-	"FeedType": "continuous"
+	"FeedType": "continuous",
+	"ChannelActiveUsers": 40,
+	"ChannelConcurrentUsers": 8,
+	"MinUserOffTimeMs": 10000,
+	"MaxUserOffTimeMs": 60000
 }

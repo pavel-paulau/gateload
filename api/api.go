@@ -84,6 +84,12 @@ func (c *SyncGatewayClient) Init(hostname, db string) {
 	c.client = &RestClient{&http.Client{Transport: t}, nil}
 }
 
+func (c *SyncGatewayClient) Valid() bool {
+	req, _ := http.NewRequest("HEAD", c.baseURI, nil)
+	resp := c.client.DoRaw(req)
+	return resp != nil
+}
+
 func (c *SyncGatewayClient) AddCookie(cookie *http.Cookie) {
 	c.client.cookie = cookie
 }
