@@ -29,13 +29,19 @@ type Config struct {
 }
 
 var DefaultConfig = Config{
-	Hostname:         "127.0.0.1",
-	DocSize:          1024,
-	RampUpIntervalMs: 10000,
-	RunTimeMs:        7200000,
-	SleepTimeMs:      10000,
-	FeedType:         "continuous",
-	Verbose:          false,
+	Hostname:               "127.0.0.1",
+	DocSize:                1024,
+	RampUpIntervalMs:       60000,
+	RunTimeMs:              7200000,
+	SleepTimeMs:            10000,
+	FeedType:               "continuous",
+	Verbose:                false,
+	NumPullers:             7,
+	NumPushers:             3,
+	ChannelActiveUsers:     10,
+	ChannelConcurrentUsers: 2,
+	MinUserOffTimeMs:       5000,
+	MaxUserOffTimeMs:       120000,
 }
 
 var Verbose = false
