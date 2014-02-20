@@ -24,7 +24,7 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 	c.Init(config.Hostname, config.Database)
 	c.AddCookie(&user.Cookie)
 
-	log.Printf("Starting new %s (%s) - %v", user.Type, user.Name, user.Cookie)
+	log.Printf("Starting new %s (%s)", user.Type, user.Name)
 	if user.Type == "pusher" {
 		go workload.RunNewPusher(user.Schedule, user.Name, &c, user.Channel, config.DocSize, config.DocSizeDistribution, user.SeqId, config.SleepTimeMs, wg)
 	} else {
@@ -84,7 +84,6 @@ func main() {
 
 	numChannels := (config.NumPullers + config.NumPushers) / config.ChannelActiveUsers
 	channelRampUpDelayMs := time.Duration(config.RampUpIntervalMs/numChannels) * time.Millisecond
-	log.Printf("channelRampUpDelay is %v for %d channels", channelRampUpDelayMs, numChannels)
 	wg := sync.WaitGroup{}
 	channel := ""
 	for _, user := range users {
@@ -93,7 +92,6 @@ func main() {
 			if channel != "" {
 				time.Sleep(channelRampUpDelayMs)
 			}
-			log.Printf("starting new channel: %s", nextChannel)
 			channel = nextChannel
 		}
 		wg := sync.WaitGroup{}

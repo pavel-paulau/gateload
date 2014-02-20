@@ -308,7 +308,6 @@ func (c *SyncGatewayClient) runContinuousChangesFeed(since interface{}) (<-chan 
 	}
 	out := make(chan *Change)
 	go func() {
-		log.Printf("New continuous changes feed since: %v", since)
 		defer close(out)
 		defer response.Body.Close()
 		scanner := bufio.NewScanner(response.Body)
@@ -324,8 +323,6 @@ func (c *SyncGatewayClient) runContinuousChangesFeed(since interface{}) (<-chan 
 		}
 		if running {
 			log.Printf("Warning: Continuous changes feed closed with error %v", scanner.Err())
-		} else {
-			log.Printf("Continuous changes feed closed at client request close")
 		}
 	}()
 	return out, &running, response
