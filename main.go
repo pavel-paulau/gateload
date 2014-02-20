@@ -58,7 +58,6 @@ func main() {
 			// users = append(users, pendingUser)
 			users[pendingUser.SeqId-config.UserOffset] = pendingUser
 		}
-		log.Printf("pending users routine done")
 	}()
 
 	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
@@ -71,11 +70,9 @@ func main() {
 			createSession(&admin, user, config)
 			pendingUsers <- user
 		}
-		log.Printf("worker done")
 	}
 
 	for i := 0; i < 16; i++ {
-		log.Printf("starting worker")
 		adminWg.Add(1)
 		go worker()
 	}
