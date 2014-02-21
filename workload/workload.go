@@ -265,7 +265,12 @@ func RunNewPuller(schedule RunSchedule, c *api.SyncGatewayClient, channel, name,
 	glExpvars.Add("user_active", 1)
 	var wakeupTime = time.Now()
 
-	var lastSeq interface{} = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
+	var lastSeq interface{}
+	if c.GetLastSeq() > MaxFirstFetch {
+		//FIX: This generates a sequence ID using internal knowledge of the gateway's sequence format.
+		lastSeq = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
+		//lastSeq = c.GetLastSeq() - MaxFirstFetch	// (for use with simple_sequences branch)
+	}
 	var changesFeed <-chan *api.Change
 	var changesResponse *http.Response
 	var cancelChangesFeed *bool

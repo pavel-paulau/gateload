@@ -259,7 +259,10 @@ type ChangeRev struct {
 
 func (c *SyncGatewayClient) changesFeedRequest(feedType, since interface{}) *http.Request {
 	var uri string
-	uri = fmt.Sprintf("%s/_changes?feed=%s&heartbeat=300000&style=all_docs&since=%s", c.baseURI, feedType, since)
+	uri = fmt.Sprintf("%s/_changes?feed=%s&heartbeat=300000&style=all_docs", c.baseURI, feedType)
+	if since != nil {
+		uri += fmt.Sprintf("&since=%v", since)
+	}
 	req, _ := http.NewRequest("GET", uri, nil)
 	return req
 }
