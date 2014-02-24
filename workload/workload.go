@@ -178,13 +178,26 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 				online = false
 				scheduleIndex++
 				if scheduleIndex < len(schedule) {
-					timer = time.NewTimer(schedule[scheduleIndex].start - timeOffset)
+					nextOnIn := schedule[scheduleIndex].start - timeOffset
+					timer = time.NewTimer(nextOnIn)
+					Log("Pusher %s going offline, next on at %v", name, nextOnIn)
+					if nextOnIn < 0 {
+						log.Printf("WARNING: pusher negative timer, exiting")
+						return
+					}
 				}
 			} else {
 				glExpvars.Add("user_awake", 1)
 				online = true
 				if schedule[scheduleIndex].end != -1 {
-					timer = time.NewTimer(schedule[scheduleIndex].end - timeOffset)
+					nextOffIn := schedule[scheduleIndex].end - timeOffset
+					timer = time.NewTimer(nextOffIn)
+					Log("Pusher %s going online, next off at %v", name, nextOffIn)
+					if nextOffIn < 0 {
+						log.Printf("WARNING: pusher negative timer, exiting")
+						glExpvars.Add("user_awake", -1)
+						return
+					}
 				}
 			}
 		default:
@@ -300,9 +313,10 @@ outer:
 				if scheduleIndex < len(schedule) {
 					nextOnIn := schedule[scheduleIndex].start - timeOffset
 					timer = time.NewTimer(nextOnIn)
-					Log("Puller %s going offline, next off at %v", name, nextOnIn)
+					Log("Puller %s going offline, next on at %v", name, nextOnIn)
 					if nextOnIn < 0 {
-						log.Printf("WARNING: negative timer")
+						log.Printf("WARNING: puller negative timer, exiting")
+						return
 					}
 				} else {
 					Log("Puller %s going offline, for good", name)
@@ -322,9 +336,11 @@ outer:
 				if schedule[scheduleIndex].end != -1 {
 					nextOffIn := schedule[scheduleIndex].end - timeOffset
 					timer = time.NewTimer(nextOffIn)
-					Log("Puller %s going online, next on at %v", name, nextOffIn)
+					Log("Puller %s going online, next off at %v", name, nextOffIn)
 					if nextOffIn < 0 {
-						log.Printf("WARNING: negative timer")
+						log.Printf("WARNING: puller negative timer, exiting")
+						glExpvars.Add("user_awake", -1)
+						return
 					}
 				} else {
 					Log("Puller %s going online, for good", name)
