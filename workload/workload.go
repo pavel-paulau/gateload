@@ -342,6 +342,7 @@ outer:
 				changesFeed = nil
 				fetchTimer = nil
 				checkpointTimer = nil
+				pendingChanges = nil
 			} else {
 				glExpvars.Add("user_awake", 1)
 				online = true
