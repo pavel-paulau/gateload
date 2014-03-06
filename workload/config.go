@@ -28,6 +28,7 @@ type Config struct {
 	SerieslyHostname       string
 	SerieslyDatabase       string
 	Verbose                bool
+	LogRequests            bool
 }
 
 var DefaultConfig = Config{

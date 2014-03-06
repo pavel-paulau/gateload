@@ -11,17 +11,21 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
 type RestClient struct {
-	client *http.Client
-	cookie interface{}
+	client  *http.Client
+	cookie  interface{}
+	Verbose bool
 }
 
 var OperationCallback func(op string, start time.Time, err error)
 
-func (c *RestClient) DoRaw(req *http.Request) *http.Response {
+var lastSerialNumber uint64
+
+func (c *RestClient) DoRaw(req *http.Request) (resp *http.Response, serialNumber uint64) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Fatal(err)
@@ -35,19 +39,32 @@ func (c *RestClient) DoRaw(req *http.Request) *http.Response {
 		req.AddCookie(c.cookie.(*http.Cookie))
 	}
 
+	serialNumber = atomic.AddUint64(&lastSerialNumber, 1)
+	if req.URL.RawQuery != "" {
+		req.URL.RawQuery += "&"
+	}
+	req.URL.RawQuery += fmt.Sprintf("n=%d", serialNumber)
+	var start time.Time
+	if c.Verbose {
+		log.Printf("#%05d: %s %s", serialNumber, req.Method, req.URL)
+		start = time.Now()
+	}
 	resp, err := c.client.Do(req)
 	if err != nil {
 		log.Printf("WARNING: Network error: %v for %s", err, req.URL)
-		return nil
+		return nil, 0
 	} else if resp.StatusCode >= 300 {
 		log.Printf("WARNING: HTTP error: %s for %s", resp.Status, req.URL)
-		return nil
+		return nil, 0
+	} else if c.Verbose {
+		log.Printf("#%05d:   <--%d (%v)", serialNumber, resp.StatusCode, time.Since(start))
 	}
-	return resp
+	return
 }
 
 func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
-	resp := c.DoRaw(req)
+	start := time.Now()
+	resp, serialNumber := c.DoRaw(req)
 	if resp == nil {
 		return
 	}
@@ -66,7 +83,27 @@ func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
 	if err = json.Unmarshal(body, &mresp); err != nil {
 		log.Panicf("Can't parse response JSON: %v\nrequest = %v\n%s", err, req, body)
 	}
+	if c.Verbose {
+		log.Printf("#%05d:      finished in %v", serialNumber, time.Since(start))
+	}
 	return
+}
+
+func (c *RestClient) DoAndIgnore(req *http.Request) {
+	start := time.Now()
+	resp, serialNumber := c.DoRaw(req)
+	if resp == nil {
+		return
+	}
+	defer resp.Body.Close()
+	_, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Panicf("Can't read HTTP response: %v", err)
+		return
+	}
+	if c.Verbose {
+		log.Printf("#%05d:      finished in %v", serialNumber, time.Since(start))
+	}
 }
 
 type SyncGatewayClient struct {
@@ -77,16 +114,16 @@ type SyncGatewayClient struct {
 
 const MaxIdleConnsPerHost = 28000
 
-func (c *SyncGatewayClient) Init(hostname, db string, port, adminPort int) {
+func (c *SyncGatewayClient) Init(hostname, db string, port, adminPort int, verbose bool) {
 	c.baseURI = fmt.Sprintf("http://%s:%d/%s", hostname, port, db)
 	c.baseAdminURI = fmt.Sprintf("http://%s:%d/%s", hostname, adminPort, db)
 	t := &http.Transport{MaxIdleConnsPerHost: MaxIdleConnsPerHost}
-	c.client = &RestClient{&http.Client{Transport: t}, nil}
+	c.client = &RestClient{&http.Client{Transport: t}, nil, verbose}
 }
 
 func (c *SyncGatewayClient) Valid() bool {
 	req, _ := http.NewRequest("HEAD", c.baseAdminURI, nil)
-	resp := c.client.DoRaw(req)
+	resp, _ := c.client.DoRaw(req)
 	return resp != nil
 }
 
@@ -128,16 +165,7 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 	uri := fmt.Sprintf("%s/_revs_diff", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	resp := c.client.DoRaw(req) // _revs_diff returns JSON array, not object, so Do can't parse it
-	if resp == nil {
-		return
-	}
-	defer resp.Body.Close()
-	_, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Panicf("Can't read HTTP response: %v", err)
-		return
-	}
+	c.client.DoAndIgnore(req)
 }
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
@@ -151,16 +179,7 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	resp := c.client.DoRaw(req) // _bulk_docs returns JSON array, not object, so Do can't parse it
-	if resp == nil {
-		return
-	}
-	defer resp.Body.Close()
-	_, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Panicf("Can't read HTTP response: %v", err)
-		return
-	}
+	c.client.DoAndIgnore(req)
 }
 
 type BulkDocsEntry struct {
@@ -179,7 +198,8 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) 
 	uri := fmt.Sprintf("%s/_bulk_get?revs=true&attachments=true", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	resp := c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
+	start := time.Now()
+	resp, serialNumber := c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
 	if resp == nil {
 		return false
 	}
@@ -197,6 +217,9 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) 
 		part, err = mr.NextPart()
 	}
 
+	if c.client.Verbose {
+		log.Printf("#%05d:      finished in %v", serialNumber, time.Since(start))
+	}
 	return true
 }
 
@@ -305,7 +328,7 @@ func (c *SyncGatewayClient) GetChangesFeed(feedType string, since interface{}) (
 
 func (c *SyncGatewayClient) runContinuousChangesFeed(since interface{}) (<-chan *Change, *bool, *http.Response) {
 	running := true
-	response := c.client.DoRaw(c.changesFeedRequest("continuous", since))
+	response, _ := c.client.DoRaw(c.changesFeedRequest("continuous", since))
 	if response == nil {
 		return nil, &running, nil
 	}
@@ -367,16 +390,7 @@ func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
 	req, _ := http.NewRequest("PUT", uri, j)
 
 	log.Printf("Adding user %s", name)
-	resp := c.client.DoRaw(req)
-	if resp == nil {
-		return
-	}
-	defer resp.Body.Close()
-	_, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Panicf("Can't read HTTP response: %v", err)
-		return
-	}
+	c.client.DoAndIgnore(req)
 }
 
 type Session struct {

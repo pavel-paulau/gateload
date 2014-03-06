@@ -21,7 +21,7 @@ func createSession(admin *api.SyncGatewayClient, user *workload.User, config wor
 
 func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 	c := api.SyncGatewayClient{}
-	c.Init(config.Hostname, config.Database, config.Port, config.AdminPort)
+	c.Init(config.Hostname, config.Database, config.Port, config.AdminPort, config.LogRequests)
 	c.AddCookie(&user.Cookie)
 
 	log.Printf("Starting new %s (%s)", user.Type, user.Name)
@@ -43,7 +43,7 @@ func main() {
 	workload.ReadConfig(&config)
 
 	admin := api.SyncGatewayClient{}
-	admin.Init(config.Hostname, config.Database, config.Port, config.AdminPort)
+	admin.Init(config.Hostname, config.Database, config.Port, config.AdminPort, config.LogRequests)
 	if !admin.Valid() {
 		log.Fatalf("unable to connect to sync_gateway, check the hostname and database")
 	}
