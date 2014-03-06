@@ -5,11 +5,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
-	"mime"
-	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -96,11 +96,7 @@ func (c *RestClient) DoAndIgnore(req *http.Request) {
 		return
 	}
 	defer resp.Body.Close()
-	_, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Panicf("Can't read HTTP response: %v", err)
-		return
-	}
+	io.Copy(ioutil.Discard, resp.Body)
 	if c.Verbose {
 		log.Printf("#%05d:      finished in %v", serialNumber, time.Since(start))
 	}
@@ -164,7 +160,6 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_revs_diff", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
-
 	c.client.DoAndIgnore(req)
 }
 
@@ -178,7 +173,6 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
-
 	c.client.DoAndIgnore(req)
 }
 
@@ -204,18 +198,13 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) 
 		return false
 	}
 	defer resp.Body.Close()
-	_, attrs, _ := mime.ParseMediaType(resp.Header.Get("Content-Type"))
-	mr := multipart.NewReader(resp.Body, attrs["boundary"])
-	part, err := mr.NextPart()
-	for part != nil && err == nil {
-		var data map[string]interface{}
-		decoder := json.NewDecoder(part)
-		err := decoder.Decode(&data)
-		if err == nil {
-			logPushToSubscriberTime(data, wakeup)
+	for _, d := range docs {
+		createdTime := createdTimeFromDocId(d.ID)
+		if createdTime != nil {
+			logPushToSubscriberTime(createdTime, wakeup)
 		}
-		part, err = mr.NextPart()
 	}
+	io.Copy(ioutil.Discard, resp.Body)
 
 	if c.client.Verbose {
 		log.Printf("#%05d:      finished in %v", serialNumber, time.Since(start))
@@ -234,27 +223,41 @@ func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string, wakeup time
 		uri += "?rev=" + revid
 	}
 	req, _ := http.NewRequest("GET", uri, nil)
-	res := c.client.Do(req)
-	if res != nil {
-		logPushToSubscriberTime(res, wakeup)
+	start := time.Now()
+	resp, serialNumber := c.client.DoRaw(req)
+	if resp == nil {
+		return false
 	}
-	return res != nil
+	createdTime := createdTimeFromDocId(docid)
+	if createdTime != nil {
+		logPushToSubscriberTime(createdTime, wakeup)
+	}
+	io.Copy(ioutil.Discard, resp.Body)
+
+	if c.client.Verbose {
+		log.Printf("#%05d:      finished in %v", serialNumber, time.Since(start))
+	}
+	return true
 }
 
-func logPushToSubscriberTime(doc map[string]interface{}, wakeup time.Time) {
-	created, ok := doc["created"]
-	if ok {
-		createdString, ok := created.(string)
-		if ok {
-			createdTime, err := time.Parse(time.RFC3339, createdString)
-			if err == nil {
-				if wakeup.After(createdTime) {
-					OperationCallback("PushToSubscriberBackfill", wakeup, nil)
-				} else {
-					OperationCallback("PushToSubscriberInteractive", createdTime, nil)
-				}
-			}
-		}
+func createdTimeFromDocId(docid string) *time.Time {
+	parts := strings.SplitN(docid, "_", 2)
+	if len(parts) < 2 {
+		return nil
+	}
+	n, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return nil
+	}
+	res := time.Unix(n/1e3, (n%1e3)*1e6)
+	return &res
+}
+
+func logPushToSubscriberTime(createdTime *time.Time, wakeup time.Time) {
+	if wakeup.After(*createdTime) {
+		OperationCallback("PushToSubscriberBackfill", wakeup, nil)
+	} else {
+		OperationCallback("PushToSubscriberInteractive", *createdTime, nil)
 	}
 }
 

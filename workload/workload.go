@@ -227,10 +227,10 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 					}
 
 					c.PostRevsDiff(revsDiff)
-					// set the creation time in docs
-					now := time.Now()
+					// set the creation time in doc id
+					nowString := "_" + strconv.Itoa(int(time.Now().UnixNano()/1e6)) // time since epoch in ms as string
 					for i, doc := range docs {
-						doc.Created = now
+						doc.Id = doc.Id + nowString
 						docs[i] = doc
 					}
 					// send bulk docs
