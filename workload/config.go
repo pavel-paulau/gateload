@@ -9,6 +9,8 @@ import (
 
 type Config struct {
 	Hostname               string
+	Port                   int
+	AdminPort              int
 	Database               string
 	ChannelActiveUsers     int
 	ChannelConcurrentUsers int
@@ -30,6 +32,8 @@ type Config struct {
 
 var DefaultConfig = Config{
 	Hostname:               "127.0.0.1",
+	Port:                   4984,
+	AdminPort:              4985,
 	DocSize:                1024,
 	RampUpIntervalMs:       60000,
 	RunTimeMs:              7200000,

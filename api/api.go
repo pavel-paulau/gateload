@@ -77,9 +77,9 @@ type SyncGatewayClient struct {
 
 const MaxIdleConnsPerHost = 28000
 
-func (c *SyncGatewayClient) Init(hostname, db string) {
-	c.baseURI = fmt.Sprintf("http://%s:4984/%s", hostname, db)
-	c.baseAdminURI = fmt.Sprintf("http://%s:4985/%s", hostname, db)
+func (c *SyncGatewayClient) Init(hostname, db string, port, adminPort int) {
+	c.baseURI = fmt.Sprintf("http://%s:%d/%s", hostname, db, port)
+	c.baseAdminURI = fmt.Sprintf("http://%s:%d/%s", hostname, db, adminPort)
 	t := &http.Transport{MaxIdleConnsPerHost: MaxIdleConnsPerHost}
 	c.client = &RestClient{&http.Client{Transport: t}, nil}
 }
