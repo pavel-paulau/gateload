@@ -168,6 +168,7 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 	start := time.Now()
 	timer := time.NewTimer(schedule[scheduleIndex].start)
 	var lastSend time.Time
+	var pushTimer <-chan time.Time
 
 	for {
 		select {
@@ -177,6 +178,7 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 			if online {
 				glExpvars.Add("user_awake", -1)
 				online = false
+				pushTimer = nil
 				scheduleIndex++
 				if scheduleIndex < len(schedule) {
 					nextOnIn := schedule[scheduleIndex].start - timeOffset
@@ -190,6 +192,7 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 			} else {
 				glExpvars.Add("user_awake", 1)
 				online = true
+				pushTimer = time.NewTimer(0).C
 				if schedule[scheduleIndex].end != -1 {
 					nextOffIn := schedule[scheduleIndex].end - timeOffset
 					timer = time.NewTimer(nextOffIn)
@@ -201,50 +204,49 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 					}
 				}
 			}
-		default:
+		case <-pushTimer:
 
-			if online {
-				if lastSend.IsZero() {
-					docsToSend = 1
-				} else {
-					//log.Printf("time since last %v", time.Since(lastSend))
-					//log.Printf("durration: %v", (time.Duration(sleepTime) * time.Millisecond))
-					docsToSend = int(time.Since(lastSend) / (time.Duration(sleepTime) * time.Millisecond))
-					//log.Printf("docs to send: %v", docsToSend)
-				}
-				if docsToSend > 0 {
-					Log("Pusher online sending %d", docsToSend)
-					// generage docs
-					docs := make([]api.Doc, docsToSend)
-					for i := 0; i < docsToSend; i++ {
-						nextDoc := <-docIterator
-						docs[i] = nextDoc
-					}
-					// send revs diff
-					revsDiff := map[string][]string{}
-					for _, doc := range docs {
-						revsDiff[doc.Id] = []string{doc.Rev}
-					}
-
-					c.PostRevsDiff(revsDiff)
-					// set the creation time in doc id
-					nowString := "_" + strconv.Itoa(int(time.Now().UnixNano()/1e6)) // time since epoch in ms as string
-					for i, doc := range docs {
-						doc.Id = doc.Id + nowString
-						docs[i] = doc
-					}
-					// send bulk docs
-					bulkDocs := map[string]interface{}{
-						"docs":      docs,
-						"new_edits": false,
-					}
-					c.PostBulkDocs(bulkDocs)
-					Log("Pusher #%d saved %d docs", seqId, docsToSend)
-					docsToSend = 0
-					lastSend = time.Now()
-				}
+			if lastSend.IsZero() {
+				docsToSend = 1
+			} else {
+				//log.Printf("time since last %v", time.Since(lastSend))
+				//log.Printf("durration: %v", (time.Duration(sleepTime) * time.Millisecond))
+				docsToSend = int(time.Since(lastSend) / (time.Duration(sleepTime) * time.Millisecond))
+				//log.Printf("docs to send: %v", docsToSend)
 			}
-			time.Sleep(time.Millisecond)
+			if docsToSend > 0 {
+				Log("Pusher online sending %d", docsToSend)
+				// generage docs
+				docs := make([]api.Doc, docsToSend)
+				for i := 0; i < docsToSend; i++ {
+					nextDoc := <-docIterator
+					docs[i] = nextDoc
+				}
+				// send revs diff
+				revsDiff := map[string][]string{}
+				for _, doc := range docs {
+					revsDiff[doc.Id] = []string{doc.Rev}
+				}
+
+				c.PostRevsDiff(revsDiff)
+				// set the creation time in doc id
+				nowString := "_" + strconv.Itoa(int(time.Now().UnixNano()/1e6)) // time since epoch in ms as string
+				for i, doc := range docs {
+					doc.Id = doc.Id + nowString
+					docs[i] = doc
+				}
+				// send bulk docs
+				bulkDocs := map[string]interface{}{
+					"docs":      docs,
+					"new_edits": false,
+				}
+				c.PostBulkDocs(bulkDocs)
+				Log("Pusher #%d saved %d docs", seqId, docsToSend)
+				docsToSend = 0
+				lastSend = time.Now()
+				// reset the timer
+				pushTimer = time.NewTimer(time.Duration(sleepTime) * time.Millisecond).C
+			}
 		}
 	}
 
