@@ -182,9 +182,7 @@ type BulkDocsEntry struct {
 }
 
 func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) bool {
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("GetBulkDocs", t, nil) }(time.Now())
-	}
+	oldStart := time.Now()
 
 	body := map[string][]BulkDocsEntry{"docs": docs}
 	b, _ := json.Marshal(body)
@@ -194,6 +192,12 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) 
 
 	start := time.Now()
 	resp, serialNumber := c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
+	if OperationCallback != nil {
+		defer func(t time.Time) {
+			OperationCallback("GetBulkDocs", t, nil)
+			log.Printf("#%05d:      oldfinished in %v", serialNumber, time.Since(t))
+		}(oldStart)
+	}
 	if resp == nil {
 		return false
 	}
@@ -213,10 +217,7 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) 
 }
 
 func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string, wakeup time.Time) bool {
-
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("GetSingle", t, nil) }(time.Now())
-	}
+	oldStart := time.Now()
 
 	uri := fmt.Sprintf("%s/%s", c.baseURI, docid)
 	if revid != "" {
@@ -225,6 +226,12 @@ func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string, wakeup time
 	req, _ := http.NewRequest("GET", uri, nil)
 	start := time.Now()
 	resp, serialNumber := c.client.DoRaw(req)
+	if OperationCallback != nil {
+		defer func(t time.Time) {
+			OperationCallback("GetSingle", t, nil)
+			log.Printf("#%05d:      oldfinished in %v", serialNumber, time.Since(t))
+		}(oldStart)
+	}
 	if resp == nil {
 		return false
 	}
