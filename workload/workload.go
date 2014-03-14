@@ -6,7 +6,6 @@ import (
 	"expvar"
 	"fmt"
 	"log"
-	"math"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -295,8 +294,7 @@ func RunNewPuller(schedule RunSchedule, c *api.SyncGatewayClient, channel, name,
 	var lastSeq interface{}
 	if c.GetLastSeq() > MaxFirstFetch {
 		//FIX: This generates a sequence ID using internal knowledge of the gateway's sequence format.
-		lastSeq = fmt.Sprintf("%s:%d", channel, int(math.Max(c.GetLastSeq()-MaxFirstFetch, 0)))
-		//lastSeq = c.GetLastSeq() - MaxFirstFetch	// (for use with simple_sequences branch)
+		lastSeq = c.GetLastSeq() - MaxFirstFetch // (for use with simple_sequences branch)
 	}
 	var changesFeed <-chan *api.Change
 	var changesResponse *http.Response
