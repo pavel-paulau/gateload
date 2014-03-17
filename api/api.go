@@ -25,12 +25,17 @@ var OperationCallback func(op string, start time.Time, err error)
 
 var lastSerialNumber uint64
 
-func (c *RestClient) DoRaw(req *http.Request) (resp *http.Response, serialNumber uint64) {
+func (c *RestClient) DoRaw(req *http.Request, opName string) (resp *http.Response, serialNumber uint64) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Fatal(err)
 		}
 	}()
+
+	var err error
+	if OperationCallback != nil && opName != "" {
+		defer func(t time.Time) { OperationCallback(opName, t, err) }(time.Now())
+	}
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept-Language", "en-us")
@@ -49,12 +54,15 @@ func (c *RestClient) DoRaw(req *http.Request) (resp *http.Response, serialNumber
 		log.Printf("#%05d: %s %s", serialNumber, req.Method, req.URL)
 		start = time.Now()
 	}
-	resp, err := c.client.Do(req)
+	resp, err = c.client.Do(req)
 	if err != nil {
 		log.Printf("WARNING: Network error: %v for %s", err, req.URL)
+		log.Printf("#%05d:   <-- Network error: %v (%v)", serialNumber, err, time.Since(start))
 		return nil, 0
 	} else if resp.StatusCode >= 300 {
 		log.Printf("WARNING: HTTP error: %s for %s", resp.Status, req.URL)
+		log.Printf("#%05d:   <-- HTTP error:%d (%v)", serialNumber, resp.StatusCode, time.Since(start))
+		// FIXME if we want this to be considered an error for the operation callback, would need to set err here
 		return nil, 0
 	} else if c.Verbose {
 		log.Printf("#%05d:   <--%d (%v)", serialNumber, resp.StatusCode, time.Since(start))
@@ -62,9 +70,9 @@ func (c *RestClient) DoRaw(req *http.Request) (resp *http.Response, serialNumber
 	return
 }
 
-func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
+func (c *RestClient) Do(req *http.Request, opName string) (mresp map[string]interface{}) {
 	start := time.Now()
-	resp, serialNumber := c.DoRaw(req)
+	resp, serialNumber := c.DoRaw(req, opName)
 	if resp == nil {
 		return
 	}
@@ -89,9 +97,9 @@ func (c *RestClient) Do(req *http.Request) (mresp map[string]interface{}) {
 	return
 }
 
-func (c *RestClient) DoAndIgnore(req *http.Request) {
+func (c *RestClient) DoAndIgnore(req *http.Request, opName string) {
 	start := time.Now()
-	resp, serialNumber := c.DoRaw(req)
+	resp, serialNumber := c.DoRaw(req, opName)
 	if resp == nil {
 		return
 	}
@@ -119,7 +127,7 @@ func (c *SyncGatewayClient) Init(hostname, db string, port, adminPort int, verbo
 
 func (c *SyncGatewayClient) Valid() bool {
 	req, _ := http.NewRequest("HEAD", c.baseAdminURI, nil)
-	resp, _ := c.client.DoRaw(req)
+	resp, _ := c.client.DoRaw(req, "")
 	return resp != nil
 }
 
@@ -137,43 +145,28 @@ type Doc struct {
 }
 
 func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
-
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("PutSingleDoc", t, nil) }(time.Now())
-	}
-
 	b, _ := json.Marshal(doc)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/%s?new_edits=false", c.baseURI, docid)
 	req, _ := http.NewRequest("PUT", uri, j)
 
-	c.client.Do(req)
+	c.client.DoAndIgnore(req, "PutSingleDoc")
 }
 
 func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
-
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("PostRevsDiff", t, nil) }(time.Now())
-	}
-
 	b, _ := json.Marshal(revsDiff)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_revs_diff", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
-	c.client.DoAndIgnore(req)
+	c.client.DoAndIgnore(req, "PostRevsDiff")
 }
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
-
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("PostBulkDocs", t, nil) }(time.Now())
-	}
-
 	b, _ := json.Marshal(docs)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
-	c.client.DoAndIgnore(req)
+	c.client.DoAndIgnore(req, "PostBulkDocs")
 }
 
 type BulkDocsEntry struct {
@@ -182,8 +175,6 @@ type BulkDocsEntry struct {
 }
 
 func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) bool {
-	oldStart := time.Now()
-
 	body := map[string][]BulkDocsEntry{"docs": docs}
 	b, _ := json.Marshal(body)
 	j := bytes.NewReader(b)
@@ -191,13 +182,7 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) 
 	req, _ := http.NewRequest("POST", uri, j)
 
 	start := time.Now()
-	resp, serialNumber := c.client.DoRaw(req) // _bulk_get returns MIME multipart, not JSON
-	if OperationCallback != nil {
-		defer func(t time.Time) {
-			OperationCallback("GetBulkDocs", t, nil)
-			log.Printf("#%05d:      oldfinished in %v", serialNumber, time.Since(t))
-		}(oldStart)
-	}
+	resp, serialNumber := c.client.DoRaw(req, "GetBulkDocs") // _bulk_get returns MIME multipart, not JSON
 	if resp == nil {
 		return false
 	}
@@ -217,21 +202,13 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) 
 }
 
 func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string, wakeup time.Time) bool {
-	oldStart := time.Now()
-
 	uri := fmt.Sprintf("%s/%s", c.baseURI, docid)
 	if revid != "" {
 		uri += "?rev=" + revid
 	}
 	req, _ := http.NewRequest("GET", uri, nil)
 	start := time.Now()
-	resp, serialNumber := c.client.DoRaw(req)
-	if OperationCallback != nil {
-		defer func(t time.Time) {
-			OperationCallback("GetSingle", t, nil)
-			log.Printf("#%05d:      oldfinished in %v", serialNumber, time.Since(t))
-		}(oldStart)
-	}
+	resp, serialNumber := c.client.DoRaw(req, "GetSingle")
 	if resp == nil {
 		return false
 	}
@@ -269,14 +246,9 @@ func logPushToSubscriberTime(createdTime *time.Time, wakeup time.Time) {
 }
 
 func (c *SyncGatewayClient) GetLastSeq() float64 {
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("GetLastSeq", t, nil) }(time.Now())
-	}
-
 	uri := fmt.Sprintf("%s/", c.baseURI)
 	req, _ := http.NewRequest("GET", uri, nil)
-
-	resp := c.client.Do(req)
+	resp := c.client.Do(req, "GetLastSeq")
 	return resp["committed_update_seq"].(float64)
 }
 
@@ -310,7 +282,7 @@ func (c *SyncGatewayClient) GetChangesFeed(feedType string, since interface{}) (
 	go func() {
 		defer close(out)
 		for running {
-			feed := c.client.Do(c.changesFeedRequest(feedType, since))
+			feed := c.client.Do(c.changesFeedRequest(feedType, since), "")
 			results := feed["results"].([]interface{})
 			for _, result := range results {
 				doc := result.(map[string]interface{})
@@ -338,7 +310,7 @@ func (c *SyncGatewayClient) GetChangesFeed(feedType string, since interface{}) (
 
 func (c *SyncGatewayClient) runContinuousChangesFeed(since interface{}) (<-chan *Change, *bool, *http.Response) {
 	running := true
-	response, _ := c.client.DoRaw(c.changesFeedRequest("continuous", since))
+	response, _ := c.client.DoRaw(c.changesFeedRequest("continuous", since), "")
 	if response == nil {
 		return nil, &running, nil
 	}
@@ -369,17 +341,11 @@ type Checkpoint struct {
 }
 
 func (c *SyncGatewayClient) SaveCheckpoint(id string, checkpoint Checkpoint) {
-
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("SaveCheckpoint", t, nil) }(time.Now())
-	}
-
 	b, _ := json.Marshal(checkpoint)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_local/%s", c.baseURI, id)
 	req, _ := http.NewRequest("PUT", uri, j)
-
-	c.client.Do(req)
+	c.client.DoAndIgnore(req, "SaveCheckpoint")
 }
 
 type UserAuth struct {
@@ -389,18 +355,12 @@ type UserAuth struct {
 }
 
 func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
-
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("AddUser", t, nil) }(time.Now())
-	}
-
 	b, _ := json.Marshal(auth)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_user/%s", c.baseAdminURI, name)
 	req, _ := http.NewRequest("PUT", uri, j)
-
 	log.Printf("Adding user %s", name)
-	c.client.DoAndIgnore(req)
+	c.client.DoAndIgnore(req, "AddUser")
 }
 
 type Session struct {
@@ -409,17 +369,12 @@ type Session struct {
 }
 
 func (c *SyncGatewayClient) CreateSession(name string, session Session) http.Cookie {
-
-	if OperationCallback != nil {
-		defer func(t time.Time) { OperationCallback("CreateSession", t, nil) }(time.Now())
-	}
-
 	b, _ := json.Marshal(session)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_session", c.baseAdminURI)
 	req, _ := http.NewRequest("POST", uri, j)
 
-	resp := c.client.Do(req)
+	resp := c.client.Do(req, "CreateSession")
 	return http.Cookie{
 		Name:  resp["cookie_name"].(string),
 		Value: resp["session_id"].(string),

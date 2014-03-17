@@ -418,6 +418,11 @@ func clientHTTPHisto(name string) metrics.Histogram {
 
 func recordHTTPClientStat(opname string, start time.Time, err error) {
 	duration := time.Since(start)
-	histo := clientHTTPHisto(opname)
-	histo.Update(int64(duration))
+	if err != nil {
+		histo := clientHTTPHisto(opname + "Errors")
+		histo.Update(int64(duration))
+	} else {
+		histo := clientHTTPHisto(opname)
+		histo.Update(int64(duration))
+	}
 }
