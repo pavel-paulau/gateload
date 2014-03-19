@@ -249,7 +249,14 @@ func (c *SyncGatewayClient) GetLastSeq() float64 {
 	uri := fmt.Sprintf("%s/", c.baseURI)
 	req, _ := http.NewRequest("GET", uri, nil)
 	resp := c.client.Do(req, "GetLastSeq")
-	return resp["committed_update_seq"].(float64)
+	if resp == nil {
+		return -1
+	}
+	committedUpdateSeq, ok := resp["committed_update_seq"].(float64)
+	if ok {
+		return committedUpdateSeq
+	}
+	return -1
 }
 
 type Change struct {

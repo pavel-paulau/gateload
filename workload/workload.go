@@ -292,9 +292,15 @@ func RunNewPuller(schedule RunSchedule, c *api.SyncGatewayClient, channel, name,
 	var wakeupTime = time.Now()
 
 	var lastSeq interface{}
-	if c.GetLastSeq() > MaxFirstFetch {
+	lastSeqFloat := c.GetLastSeq()
+	if lastSeqFloat < 0 {
+		Log("Puller, unable to establish last sequence number, exiting")
+		return
+	}
+	lastSeq = lastSeqFloat
+	if lastSeqFloat > MaxFirstFetch {
 		//FIX: This generates a sequence ID using internal knowledge of the gateway's sequence format.
-		lastSeq = c.GetLastSeq() - MaxFirstFetch // (for use with simple_sequences branch)
+		lastSeq = lastSeqFloat - MaxFirstFetch // (for use with simple_sequences branch)
 	}
 	var changesFeed <-chan *api.Change
 	var changesResponse *http.Response
