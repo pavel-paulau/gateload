@@ -214,7 +214,7 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 				//log.Printf("docs to send: %v", docsToSend)
 			}
 			if docsToSend > 0 {
-				Log("Pusher online sending %d", docsToSend)
+				Log("Pusher online sending %d docs", docsToSend)
 				// generage docs
 				docs := make([]api.Doc, docsToSend)
 				for i := 0; i < docsToSend; i++ {
@@ -239,8 +239,12 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 					"docs":      docs,
 					"new_edits": false,
 				}
-				c.PostBulkDocs(bulkDocs)
 				Log("Pusher #%d saved %d docs", seqId, docsToSend)
+				if c.PostBulkDocs(bulkDocs) {
+					glExpvars.Add("total_doc_pushed", int64(docsToSend))
+				} else {
+					glExpvars.Add("total_doc_failed_to_push", int64(docsToSend))
+				}
 				docsToSend = 0
 				lastSend = time.Now()
 				// reset the timer
@@ -270,10 +274,16 @@ func pullChanges(c *api.SyncGatewayClient, changes []*api.Change, wakeup time.Ti
 	if len(docs) == 1 {
 		if !c.GetSingleDoc(docs[0].ID, docs[0].Rev, wakeup) {
 			docs = nil
+			glExpvars.Add("total_doc_failed_to_pull", 1)
+		} else {
+			glExpvars.Add("total_doc_pulled", 1)
 		}
 	} else {
 		if !c.GetBulkDocs(docs, wakeup) {
 			docs = nil
+			glExpvars.Add("total_doc_failed_to_pull", int64(len(docs)))
+		} else {
+			glExpvars.Add("total_doc_pulled", int64(len(docs)))
 		}
 	}
 	return len(docs), newLastSeq

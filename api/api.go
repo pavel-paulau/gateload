@@ -97,17 +97,23 @@ func (c *RestClient) Do(req *http.Request, opName string) (mresp map[string]inte
 	return
 }
 
-func (c *RestClient) DoAndIgnore(req *http.Request, opName string) {
+func (c *RestClient) DoAndIgnore(req *http.Request, opName string) bool {
 	start := time.Now()
 	resp, serialNumber := c.DoRaw(req, opName)
 	if resp == nil {
-		return
+		return false
 	}
 	defer resp.Body.Close()
 	io.Copy(ioutil.Discard, resp.Body)
+	_, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Panicf("Can't read HTTP response: %v", err)
+		return false
+	}
 	if c.Verbose {
 		log.Printf("#%05d:      finished in %v", serialNumber, time.Since(start))
 	}
+	return true
 }
 
 type SyncGatewayClient struct {
@@ -144,13 +150,13 @@ type Doc struct {
 	Created   time.Time              `json:"created"`
 }
 
-func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) {
+func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) bool {
 	b, _ := json.Marshal(doc)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/%s?new_edits=false", c.baseURI, docid)
 	req, _ := http.NewRequest("PUT", uri, j)
 
-	c.client.DoAndIgnore(req, "PutSingleDoc")
+	return c.client.DoAndIgnore(req, "PutSingleDoc")
 }
 
 func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
@@ -161,12 +167,12 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 	c.client.DoAndIgnore(req, "PostRevsDiff")
 }
 
-func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) {
+func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) bool {
 	b, _ := json.Marshal(docs)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
-	c.client.DoAndIgnore(req, "PostBulkDocs")
+	return c.client.DoAndIgnore(req, "PostBulkDocs")
 }
 
 type BulkDocsEntry struct {
@@ -180,7 +186,6 @@ func (c *SyncGatewayClient) GetBulkDocs(docs []BulkDocsEntry, wakeup time.Time) 
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_get?revs=true&attachments=true", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
-
 	start := time.Now()
 	resp, serialNumber := c.client.DoRaw(req, "GetBulkDocs") // _bulk_get returns MIME multipart, not JSON
 	if resp == nil {
