@@ -203,10 +203,13 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) bool {
 	if resp == nil {
 		return false
 	}
-	status := int(resp[0].(map[string]interface{})["status"].(float64))
-	if status != http.StatusCreated && status != http.StatusOK {
-		log.Printf("Error: PostBulkDocs failed with status code %d", status)
-		return false
+	stat := resp[0].(map[string]interface{})["status"]
+	if stat != nil {
+		status := int(stat.(float64))
+		if status != http.StatusCreated && status != http.StatusOK {
+			log.Printf("Error: PostBulkDocs failed with status code %d", status)
+			return false
+		}
 	}
 	return true
 }
