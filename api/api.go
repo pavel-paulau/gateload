@@ -97,6 +97,33 @@ func (c *RestClient) Do(req *http.Request, opName string) (mresp map[string]inte
 	return
 }
 
+func (c *RestClient) Do_returns_json_array(req *http.Request, opName string) (mresp []interface{}) {
+	start := time.Now()
+	resp, serialNumber := c.DoRaw(req, opName)
+	if resp == nil {
+		return
+	}
+	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+		log.Panicf("Non-JSON response for %v", req)
+		return
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Panicf("Can't read HTTP response: %v", err)
+		return
+	}
+
+	if err = json.Unmarshal(body, &mresp); err != nil {
+		log.Panicf("Can't parse response JSON: %v\nrequest = %v\n%s", err, req, body)
+	}
+	if c.Verbose {
+		log.Printf("#%05d:      finished in %v", serialNumber, time.Since(start))
+	}
+	return
+}
+
 func (c *RestClient) DoAndIgnore(req *http.Request, opName string) bool {
 	start := time.Now()
 	resp, serialNumber := c.DoRaw(req, opName)
@@ -172,7 +199,16 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) bool {
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
 	req, _ := http.NewRequest("POST", uri, j)
-	return c.client.DoAndIgnore(req, "PostBulkDocs")
+	resp := c.client.Do_returns_json_array(req, "PostBulkDocs")
+	if resp == nil {
+		return false
+	}
+	status := int(resp[0].(map[string]interface{})["status"].(float64))
+	if status != http.StatusCreated && status != http.StatusOK {
+		log.Printf("Error: PostBulkDocs failed with status code %d", status)
+		return false
+	}
+	return true
 }
 
 type BulkDocsEntry struct {
