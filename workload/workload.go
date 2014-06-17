@@ -138,7 +138,7 @@ func RunScheduleFollower(schedule RunSchedule, name string, wg *sync.WaitGroup) 
 
 }
 
-func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, channel string, size int, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup) {
+func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, channel string, size int, sendAttachment bool, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	glExpvars.Add("user_active", 1)
@@ -159,7 +159,8 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 		return
 	}
 
-	docIterator := DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, docSizeGenerator, channel)
+	docIterator := DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, docSizeGenerator, channel, sendAttachment)
+
 	docsToSend := 0
 
 	online := false
@@ -399,7 +400,7 @@ outer:
 			var nDocs int
 			nDocs, lastSeq = pullChanges(c, pendingChanges, wakeupTime)
 			pendingChanges = nil
-			Log("Puller %s read %d docs", name, nDocs)
+			Log("Puller %s done reading %d docs", name, nDocs)
 			if nDocs > 0 && checkpointTimer == nil {
 				checkpointTimer = time.NewTimer(CheckpointInterval).C
 			}

@@ -169,12 +169,17 @@ func (c *SyncGatewayClient) AddCookie(cookie *http.Cookie) {
 }
 
 type Doc struct {
-	Id        string                 `json:"_id"`
-	Rev       string                 `json:"_rev"`
-	Channels  []string               `json:"channels"`
-	Data      map[string]string      `json:"data"`
-	Revisions map[string]interface{} `json:"_revisions"`
-	Created   time.Time              `json:"created"`
+	Id          string                       `json:"_id"`
+	Rev         string                       `json:"_rev"`
+	Channels    []string                     `json:"channels"`
+	Data        map[string]string            `json:"data,,omitempty"`
+	Revisions   map[string]interface{}       `json:"_revisions"`
+	Created     time.Time                    `json:"created"`
+	Attachments map[string]AttachmentContent `json:"_attachments,omitempty"`
+}
+
+type AttachmentContent struct {
+	Data string `json:"data"`
 }
 
 func (c *SyncGatewayClient) PutSingleDoc(docid string, doc Doc) bool {
@@ -195,6 +200,7 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 }
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) bool {
+
 	b, _ := json.Marshal(docs)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
@@ -207,7 +213,7 @@ func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) bool {
 	if stat != nil {
 		status := int(stat.(float64))
 		if status != http.StatusCreated && status != http.StatusOK {
-			log.Printf("Error: PostBulkDocs failed with status code %d", status)
+			log.Printf("Error: PostBulkDocs failed with status code from JSON %d", status)
 			return false
 		}
 	}

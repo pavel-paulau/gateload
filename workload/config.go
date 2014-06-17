@@ -20,6 +20,7 @@ type Config struct {
 	NumPushers             int
 	UserOffset             int
 	DocSize                int
+	SendAttachment         bool
 	DocSizeDistribution    DocSizeDistribution
 	RampUpIntervalMs       int
 	SleepTimeMs            int
@@ -36,6 +37,7 @@ var DefaultConfig = Config{
 	Port:                   4984,
 	AdminPort:              4985,
 	DocSize:                1024,
+	SendAttachment:         false,
 	RampUpIntervalMs:       60000,
 	RunTimeMs:              7200000,
 	SleepTimeMs:            10000,

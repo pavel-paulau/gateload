@@ -26,7 +26,7 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 
 	log.Printf("Starting new %s (%s)", user.Type, user.Name)
 	if user.Type == "pusher" {
-		go workload.RunNewPusher(user.Schedule, user.Name, &c, user.Channel, config.DocSize, config.DocSizeDistribution, user.SeqId, config.SleepTimeMs, wg)
+		go workload.RunNewPusher(user.Schedule, user.Name, &c, user.Channel, config.DocSize, config.SendAttachment, config.DocSizeDistribution, user.SeqId, config.SleepTimeMs, wg)
 	} else {
 		go workload.RunNewPuller(user.Schedule, &c, user.Channel, user.Name, config.FeedType, wg)
 	}
