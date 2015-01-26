@@ -66,7 +66,14 @@ func UserIterator(NumPullers, NumPushers, UserOffset, ChannelActiveUsers, Channe
 		for currUser := UserOffset; currUser < numUsers+UserOffset; currUser++ {
 			currChannel := currUser / ChannelActiveUsers
 			if currChannel != lastChannel {
-				scheduleBuilder := NewScheduleBuilder(ChannelActiveUsers, ChannelConcurrentUsers, time.Duration(RampUpDelay)*time.Millisecond, time.Duration(MinUserOffTimeMs)*time.Millisecond, time.Duration(MaxUserOffTimeMs)*time.Millisecond, time.Duration(RunTimeMs)*time.Millisecond)
+				scheduleBuilder := NewScheduleBuilder(
+					ChannelActiveUsers,
+					ChannelConcurrentUsers,
+					time.Duration(RampUpDelay)*time.Millisecond,
+					time.Duration(MinUserOffTimeMs)*time.Millisecond,
+					time.Duration(MaxUserOffTimeMs)*time.Millisecond,
+					time.Duration(RunTimeMs)*time.Millisecond,
+				)
 				schedules = scheduleBuilder.BuildSchedules()
 
 				lastChannel = currChannel
@@ -159,7 +166,13 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 		return
 	}
 
-	docIterator := DocIterator(seqId*DocsPerUser, (seqId+1)*DocsPerUser, docSizeGenerator, channel, sendAttachment)
+	docIterator := DocIterator(
+		seqId*DocsPerUser,
+		(seqId+1)*DocsPerUser,
+		docSizeGenerator,
+		channel,
+		sendAttachment,
+	)
 
 	docsToSend := 0
 
