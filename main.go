@@ -62,7 +62,17 @@ func main() {
 
 	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
 	// use a fixed number of workers to create the users/sessions
-	userIterator := workload.UserIterator(config.NumPullers, config.NumPushers, config.UserOffset, config.ChannelActiveUsers, config.ChannelConcurrentUsers, config.MinUserOffTimeMs, config.MaxUserOffTimeMs, rampUpDelay, config.RunTimeMs)
+	userIterator := workload.UserIterator(
+		config.NumPullers,
+		config.NumPushers,
+		config.UserOffset,
+		config.ChannelActiveUsers,
+		config.ChannelConcurrentUsers,
+		config.MinUserOffTimeMs,
+		config.MaxUserOffTimeMs,
+		rampUpDelay,
+		config.RunTimeMs,
+	)
 	adminWg := sync.WaitGroup{}
 	worker := func() {
 		defer adminWg.Done()
