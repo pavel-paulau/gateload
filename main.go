@@ -21,7 +21,13 @@ func main() {
 	workload.ReadConfig(&config)
 
 	admin := api.SyncGatewayClient{}
-	admin.Init(config.Hostname, config.Database, config.Port, config.AdminPort, config.LogRequests)
+	admin.Init(
+		config.Hostname,
+		config.Database,
+		config.Port,
+		config.AdminPort,
+		config.LogRequests,
+	)
 	if !admin.Valid() {
 		log.Fatalf("unable to connect to sync_gateway, check the hostname and database")
 	}
@@ -39,6 +45,7 @@ func main() {
 	}()
 
 	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
+
 	// use a fixed number of workers to create the users/sessions
 	userIterator := workload.UserIterator(
 		config.NumPullers,
@@ -72,6 +79,7 @@ func main() {
 
 	numChannels := (config.NumPullers + config.NumPushers) / config.ChannelActiveUsers
 	channelRampUpDelayMs := time.Duration(config.RampUpIntervalMs/numChannels) * time.Millisecond
+
 	wg := sync.WaitGroup{}
 	channel := ""
 	for _, user := range users {
