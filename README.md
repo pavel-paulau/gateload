@@ -3,10 +3,20 @@ gateload
 
 Sync Gateway workload generator
 
+Install
+-------
+
+```
+$ go get -u -v -t github.com/couchbaselabs/gateload
+```
+
 Usage
 -----
 
+```
 ./gateload -workload=workload.json
+```
+
 
 Configuration files
 -------------------
@@ -43,11 +53,11 @@ to generate random document sizes with a given distribution, replace DocSize wit
           }
         ]
 
-* Hostname - address of Sync Gateway instance (notice that port 4985 must be accessible as well)
-* Database - name of Sync Gateway database
-* DocSize - document body size in bytes
-* DocSizeDistribution - document body size distributions, specifying Prob (integer probability), MinSize the minimum document size in this distribution, and MaxSize the maximum document size in this distribution.  All probabilities must sum to 100.
-* RampUpIntervalMs - time to start all users (e.g, with RampUpIntervalMs=10000 and 10 users, each user starts every 1 second)
-* SleepTimeMs - delay between push (PUT single doc) requests
-* NumPullers - number of active readers to start
-* NumPushers - number of active writers to start
+* **Hostname** - address of Sync Gateway instance (notice that port 4985 must be accessible as well)
+* **Database** - name of Sync Gateway database
+* **DocSize** - document body size in bytes
+* **DocSizeDistribution** - document body size distributions, specifying Prob (integer probability), MinSize the minimum document size in this distribution, and MaxSize the maximum document size in this distribution.  All probabilities must sum to 100.
+* **RampUpIntervalMs** - time to start all users (e.g, with RampUpIntervalMs=10000 and 10 users, each user starts every 1 second)
+* **SleepTimeMs** - delay between push (PUT single doc) requests
+* **NumPullers** - number of active readers to start
+* **NumPushers** - number of active writers to start
