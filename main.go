@@ -11,28 +11,6 @@ import (
 	"github.com/couchbaselabs/gateload/workload"
 )
 
-func createSession(admin *api.SyncGatewayClient, user *workload.User, config workload.Config) {
-	userMeta := api.UserAuth{Name: user.Name, Password: "password", AdminChannels: []string{user.Channel}}
-	admin.AddUser(user.Name, userMeta)
-
-	session := api.Session{Name: user.Name, TTL: 2592000} // 1 month
-	user.Cookie = admin.CreateSession(user.Name, session)
-}
-
-func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
-	c := api.SyncGatewayClient{}
-	c.Init(config.Hostname, config.Database, config.Port, config.AdminPort, config.LogRequests)
-	c.AddCookie(&user.Cookie)
-
-	log.Printf("Starting new %s (%s)", user.Type, user.Name)
-	if user.Type == "pusher" {
-		go workload.RunNewPusher(user.Schedule, user.Name, &c, user.Channel, config.DocSize, config.SendAttachment, config.DocSizeDistribution, user.SeqId, config.SleepTimeMs, wg)
-	} else {
-		go workload.RunNewPuller(user.Schedule, &c, user.Channel, user.Name, config.FeedType, wg)
-	}
-
-}
-
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
@@ -115,4 +93,26 @@ func main() {
 	} else {
 		wg.Wait()
 	}
+}
+
+func createSession(admin *api.SyncGatewayClient, user *workload.User, config workload.Config) {
+	userMeta := api.UserAuth{Name: user.Name, Password: "password", AdminChannels: []string{user.Channel}}
+	admin.AddUser(user.Name, userMeta)
+
+	session := api.Session{Name: user.Name, TTL: 2592000} // 1 month
+	user.Cookie = admin.CreateSession(user.Name, session)
+}
+
+func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
+	c := api.SyncGatewayClient{}
+	c.Init(config.Hostname, config.Database, config.Port, config.AdminPort, config.LogRequests)
+	c.AddCookie(&user.Cookie)
+
+	log.Printf("Starting new %s (%s)", user.Type, user.Name)
+	if user.Type == "pusher" {
+		go workload.RunNewPusher(user.Schedule, user.Name, &c, user.Channel, config.DocSize, config.SendAttachment, config.DocSizeDistribution, user.SeqId, config.SleepTimeMs, wg)
+	} else {
+		go workload.RunNewPuller(user.Schedule, &c, user.Channel, user.Name, config.FeedType, wg)
+	}
+
 }
