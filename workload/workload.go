@@ -47,7 +47,10 @@ type User struct {
 	Schedule            RunSchedule
 }
 
+// Generates all the users that will be used by this gateload run.  Each new user is added
+// to the chan that is returned.
 func UserIterator(NumPullers, NumPushers, UserOffset, ChannelActiveUsers, ChannelConcurrentUsers, MinUserOffTimeMs, MaxUserOffTimeMs, RampUpDelay, RunTimeMs int) <-chan *User {
+
 	numUsers := NumPullers + NumPushers
 	usersTypes := make([]string, 0, numUsers)
 	for i := 0; i < NumPullers; i++ {
@@ -229,7 +232,7 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 			}
 			if docsToSend > 0 {
 				Log("Pusher online sending %d docs", docsToSend)
-				// generage docs
+				// generate docs
 				docs := make([]api.Doc, docsToSend)
 				for i := 0; i < docsToSend; i++ {
 					nextDoc := <-docIterator
