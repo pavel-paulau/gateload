@@ -14,7 +14,7 @@ Usage
 -----
 
 ```
-./gateload -workload=workload.json
+gateload -workload=workload.json
 ```
 
 
