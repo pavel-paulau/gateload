@@ -7,7 +7,7 @@ Install
 -------
 
 ```
-$ go get -u -v -t github.com/couchbaselabs/gateload
+$ go get github.com/couchbaselabs/gateload
 ```
 
 Usage
