@@ -266,6 +266,7 @@ func (c *SyncGatewayClient) GetSingleDoc(docid string, revid string, wakeup time
 	if createdTime != nil {
 		logPushToSubscriberTime(createdTime, wakeup)
 	}
+	defer resp.Body.Close()
 	io.Copy(ioutil.Discard, resp.Body)
 
 	if c.client.Verbose {
