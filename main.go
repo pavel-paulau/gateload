@@ -112,7 +112,10 @@ func createSession(admin *api.SyncGatewayClient, user *workload.User, config wor
 	admin.AddUser(user.Name, userMeta)
 
 	session := api.Session{Name: user.Name, TTL: 2592000} // 1 month
+	log.Printf("====== Creating new session for %s (%s)", user.Type, user.Name)
 	user.Cookie = admin.CreateSession(user.Name, session)
+	log.Printf("====== Done Creating new session for %s (%s)", user.Type, user.Name)
+
 }
 
 func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
@@ -150,5 +153,6 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 			wg,
 		)
 	}
+	log.Printf("------ Done Starting new %s (%s)", user.Type, user.Name)
 
 }
