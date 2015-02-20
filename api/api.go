@@ -16,9 +16,11 @@ import (
 )
 
 type RestClient struct {
-	client  *http.Client
-	cookie  interface{}
-	Verbose bool
+	client   *http.Client
+	cookie   interface{} // if using session based auth, cookie will be here
+	username string      // if using basic auth, username will be here
+	password string      // if using basic auth, password will be here
+	Verbose  bool
 }
 
 var OperationCallback func(op string, start time.Time, err error)
@@ -42,6 +44,8 @@ func (c *RestClient) DoRaw(req *http.Request, opName string) (resp *http.Respons
 	//req.Header.Set("Accept-Encoding", "gzip, deflate")
 	if c.cookie != nil {
 		req.AddCookie(c.cookie.(*http.Cookie))
+	} else {
+		req.SetBasicAuth(c.username, c.password)
 	}
 
 	serialNumber = atomic.AddUint64(&lastSerialNumber, 1)
@@ -155,13 +159,23 @@ func (c *SyncGatewayClient) Init(hostname, db string, port, adminPort int, verbo
 	c.baseURI = fmt.Sprintf("http://%s:%d/%s", hostname, port, db)
 	c.baseAdminURI = fmt.Sprintf("http://%s:%d/%s", hostname, adminPort, db)
 	t := &http.Transport{MaxIdleConnsPerHost: MaxIdleConnsPerHost}
-	c.client = &RestClient{&http.Client{Transport: t}, nil, verbose}
+	c.client = &RestClient{
+		client:  &http.Client{Transport: t},
+		Verbose: verbose,
+	}
 }
 
 func (c *SyncGatewayClient) Valid() bool {
 	req, _ := http.NewRequest("HEAD", c.baseAdminURI, nil)
 	resp, _ := c.client.DoRaw(req, "")
 	return resp != nil
+}
+
+func (c *SyncGatewayClient) AddUsername(username string) {
+	c.client.username = username
+}
+func (c *SyncGatewayClient) AddPassword(password string) {
+	c.client.password = password
 }
 
 func (c *SyncGatewayClient) AddCookie(cookie *http.Cookie) {

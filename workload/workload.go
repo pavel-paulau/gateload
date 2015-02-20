@@ -41,10 +41,12 @@ func Log(fmt string, args ...interface{}) {
 }
 
 type User struct {
-	SeqId               int
-	Type, Name, Channel string
-	Cookie              http.Cookie
-	Schedule            RunSchedule
+	SeqId    int
+	Type     string
+	Name     string
+	Channel  string
+	Cookie   http.Cookie
+	Schedule RunSchedule
 }
 
 // Generates all the users that will be used by this gateload run.  Each new user is added

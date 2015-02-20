@@ -30,6 +30,7 @@ type Config struct {
 	SerieslyDatabase       string
 	Verbose                bool
 	LogRequests            bool
+	AuthType               string
 }
 
 var DefaultConfig = Config{
@@ -49,6 +50,7 @@ var DefaultConfig = Config{
 	ChannelConcurrentUsers: 2,
 	MinUserOffTimeMs:       5000,
 	MaxUserOffTimeMs:       120000,
+	AuthType:               "session",
 }
 
 var Verbose = false
