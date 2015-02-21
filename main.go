@@ -14,7 +14,11 @@ import (
 const (
 	AUTH_TYPE_SESSION = "session"
 	AUTH_TYPE_BASIC   = "basic"
-	DEFAULT_PASSWORD  = "password"
+
+	// this password is "special" because the sync gateway will accept it as-is
+	// and skip the bcrypt hashing, which is expensive.
+	// see https://github.com/couchbase/sync_gateway/issues/666#issuecomment-75341656
+	DEFAULT_PASSWORD = "$2a$10$X4GR359A4j9f.Lmq3oooGOzSRaCq6wgRXbM4zdPsqv9a4xbXkJN8C"
 )
 
 func main() {
@@ -73,7 +77,7 @@ func main() {
 		}
 	}
 
-	for i := 0; i < 16; i++ {
+	for i := 0; i < 160; i++ {
 		adminWg.Add(1)
 		go worker()
 	}
