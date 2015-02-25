@@ -14,7 +14,6 @@ import (
 const (
 	AUTH_TYPE_SESSION = "session"
 	AUTH_TYPE_BASIC   = "basic"
-	DEFAULT_PASSWORD  = "password"
 )
 
 func main() {
@@ -113,7 +112,7 @@ func createSession(admin *api.SyncGatewayClient, user *workload.User, config wor
 
 	userMeta := api.UserAuth{
 		Name:          user.Name,
-		Password:      DEFAULT_PASSWORD,
+		Password:      config.Password,
 		AdminChannels: []string{user.Channel},
 	}
 	admin.AddUser(user.Name, userMeta)
@@ -142,7 +141,7 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 		c.AddCookie(&user.Cookie)
 	} else {
 		c.AddUsername(user.Name)
-		c.AddPassword(DEFAULT_PASSWORD)
+		c.AddPassword(config.Password)
 	}
 
 	log.Printf("Starting new %s (%s)", user.Type, user.Name)

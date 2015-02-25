@@ -31,6 +31,7 @@ type Config struct {
 	Verbose                bool
 	LogRequests            bool
 	AuthType               string
+	Password               string
 }
 
 var DefaultConfig = Config{
@@ -51,6 +52,7 @@ var DefaultConfig = Config{
 	MinUserOffTimeMs:       5000,
 	MaxUserOffTimeMs:       120000,
 	AuthType:               "session",
+	Password:               "password",
 }
 
 var Verbose = false
