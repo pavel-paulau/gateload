@@ -20,7 +20,10 @@ const (
 func main() {
 
 	if os.Getenv("GOMAXPROCS") == "" {
+		log.Printf("Setting GOMAXPROCS to %v", runtime.NumCPU())
 		runtime.GOMAXPROCS(runtime.NumCPU())
+	} else {
+		log.Printf("GOMAXPROCS is set at %v", os.Getenv("GOMAXPROCS"))
 	}
 
 	// start up an http server, just to serve up expvars
