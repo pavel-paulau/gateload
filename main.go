@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"runtime"
 	"sync"
 	"time"
@@ -17,7 +18,10 @@ const (
 )
 
 func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	if os.Getenv("GOMAXPROCS") == "" {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
 
 	// start up an http server, just to serve up expvars
 	go http.ListenAndServe(":9876", nil)
