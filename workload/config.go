@@ -32,6 +32,7 @@ type Config struct {
 	LogRequests            bool
 	AuthType               string
 	Password               string
+	AddDocToSpecificPuller bool // Grant access of doc to specific user, to trigger view queries (SG issue #825)
 }
 
 var DefaultConfig = Config{
@@ -53,6 +54,7 @@ var DefaultConfig = Config{
 	MaxUserOffTimeMs:       120000,
 	AuthType:               "session",
 	Password:               "password",
+	AddDocToSpecificPuller: false,
 }
 
 var Verbose = false
