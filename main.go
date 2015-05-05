@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -113,6 +114,9 @@ func main() {
 	} else {
 		wg.Wait()
 	}
+
+	writeExpvarsToFile()
+
 }
 
 func createSession(admin *api.SyncGatewayClient, user *workload.User, config workload.Config) {
@@ -177,5 +181,31 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 		)
 	}
 	log.Printf("------ Done Starting new %s (%s)", user.Type, user.Name)
+
+}
+
+// At the end of the run, write the full list of expvars to a file
+func writeExpvarsToFile() {
+
+	// read http
+	url := "http://localhost:9876/debug/vars"
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Fatalf("Error writing expvars, failed connection to: %v", url)
+	}
+	defer resp.Body.Close()
+
+	// write to file
+	destFileName := "gateload_expvars.json"
+	destFile, err := os.Create(destFileName)
+	if err != nil {
+		log.Fatalf("Error opening file for writing to :%v", destFileName)
+	}
+	_, err = io.Copy(destFile, resp.Body)
+	if err != nil {
+		log.Fatalf("Error copying from %v -> %v", url, destFile)
+	}
+
+	log.Printf("Wrote results to %v", destFileName)
 
 }
