@@ -122,7 +122,7 @@ func createSession(admin *api.SyncGatewayClient, user *workload.User, config wor
 		Password:      config.Password,
 		AdminChannels: []string{user.Channel},
 	}
-	admin.AddUser(user.Name, userMeta)
+	admin.AddUser(user.Name, userMeta, user.Type)
 
 	if config.AuthType == AUTH_TYPE_SESSION {
 
@@ -164,6 +164,7 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 			user.SeqId,
 			config.SleepTimeMs,
 			wg,
+			config.AddDocToTargetUser,
 		)
 	} else {
 		go workload.RunNewPuller(

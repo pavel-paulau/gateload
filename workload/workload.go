@@ -24,6 +24,10 @@ var (
 	histosMu  = sync.Mutex{}
 
 	expOpsHistos *expvar.Map
+
+	// keep track of pushers and pullers
+	Pullers = []User{}
+	Pushers = []User{}
 )
 
 func init() {
@@ -84,18 +88,31 @@ func UserIterator(NumPullers, NumPushers, UserOffset, ChannelActiveUsers, Channe
 				lastChannel = currChannel
 				channelUserNum = 0
 			}
-			ch <- &User{
+			user := &User{
 				SeqId:    currUser,
 				Type:     usersTypes[randSeq[currUser-UserOffset]],
 				Name:     fmt.Sprintf("user-%v", currUser),
 				Channel:  fmt.Sprintf("channel-%v", currChannel),
 				Schedule: schedules[channelUserNum],
 			}
+			ch <- user
+			saveUser(user)
 			channelUserNum++
 		}
 		close(ch)
 	}()
 	return ch
+}
+
+func saveUser(user *User) {
+	switch user.Type {
+	case "pusher":
+		Pushers = append(Pushers, *user)
+	case "puller":
+		Pullers = append(Pullers, *user)
+	default:
+		panic("Unknown user type")
+	}
 }
 
 func Hash(inString string) string {
@@ -150,7 +167,7 @@ func RunScheduleFollower(schedule RunSchedule, name string, wg *sync.WaitGroup) 
 
 }
 
-func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, channel string, size int, sendAttachment bool, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup) {
+func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, channel string, size int, sendAttachment bool, dist DocSizeDistribution, seqId, sleepTime int, wg *sync.WaitGroup, addTargetUser bool) {
 	defer wg.Done()
 
 	glExpvars.Add("user_active", 1)
@@ -177,6 +194,7 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 		docSizeGenerator,
 		channel,
 		sendAttachment,
+		addTargetUser,
 	)
 
 	docsToSend := 0

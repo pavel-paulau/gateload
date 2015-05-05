@@ -190,6 +190,10 @@ type Doc struct {
 	Revisions   map[string]interface{}       `json:"_revisions"`
 	Created     time.Time                    `json:"created"`
 	Attachments map[string]AttachmentContent `json:"_attachments,omitempty"`
+
+	// this field is only used by a special sync function on SG which
+	// will grant access for this doc to the (puller) user id in target_user
+	TargetUser string `json:"target_user"`
 }
 
 type AttachmentContent struct {
@@ -215,6 +219,7 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) bool {
 
+	log.Printf("PostBulkDocs: %+v", docs)
 	b, _ := json.Marshal(docs)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
@@ -426,12 +431,12 @@ type UserAuth struct {
 	AdminChannels []string `json:"admin_channels"`
 }
 
-func (c *SyncGatewayClient) AddUser(name string, auth UserAuth) {
+func (c *SyncGatewayClient) AddUser(name string, auth UserAuth, userType string) {
 	b, _ := json.Marshal(auth)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_user/%s", c.baseAdminURI, name)
 	req, _ := http.NewRequest("PUT", uri, j)
-	log.Printf("Adding user %s", name)
+	log.Printf("Adding %s user: %s", userType, name)
 	c.client.DoAndIgnore(req, "AddUser")
 }
 

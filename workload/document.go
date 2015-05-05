@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"strconv"
+	"time"
 
 	"github.com/couchbaselabs/gateload/api"
 )
@@ -53,7 +54,7 @@ func (dsg *DocSizeGenerator) NextDocSize() int {
 	return 0
 }
 
-func DocIterator(start, end int, dsg *DocSizeGenerator, channel string, sendAttachment bool) <-chan api.Doc {
+func DocIterator(start, end int, dsg *DocSizeGenerator, channel string, sendAttachment, addTargetUser bool) <-chan api.Doc {
 	ch := make(chan api.Doc)
 	go func() {
 		for i := start; i < end; i++ {
@@ -75,6 +76,10 @@ func DocIterator(start, end int, dsg *DocSizeGenerator, channel string, sendAtta
 					Revisions:   map[string]interface{}{"ids": []string{rev}, "start": 1},
 					Attachments: map[string]api.AttachmentContent{docid: attachmentContent},
 				}
+				if addTargetUser {
+					doc.TargetUser = getRandomTargetUserName()
+				}
+
 				ch <- doc
 			} else {
 				doc := api.Doc{
@@ -84,10 +89,30 @@ func DocIterator(start, end int, dsg *DocSizeGenerator, channel string, sendAtta
 					Data:      map[string]string{docid: RandString(docid, dsg.NextDocSize())},
 					Revisions: map[string]interface{}{"ids": []string{rev}, "start": 1},
 				}
+				if addTargetUser {
+					doc.TargetUser = getRandomTargetUserName()
+				}
 				ch <- doc
 			}
 		}
 		close(ch)
 	}()
 	return ch
+}
+
+func getRandomTargetUserName() string {
+
+	// find random Puller in list of pullers
+	randomIndex := random(0, len(Pullers))
+
+	// return username of that puller
+	randomPuller := Pullers[randomIndex]
+
+	return randomPuller.Name
+
+}
+
+func random(min, max int) int {
+	rand.Seed(time.Now().Unix())
+	return rand.Intn(max-min) + min
 }
