@@ -219,7 +219,6 @@ func (c *SyncGatewayClient) PostRevsDiff(revsDiff map[string][]string) {
 
 func (c *SyncGatewayClient) PostBulkDocs(docs map[string]interface{}) bool {
 
-	log.Printf("PostBulkDocs: %+v", docs)
 	b, _ := json.Marshal(docs)
 	j := bytes.NewReader(b)
 	uri := fmt.Sprintf("%s/_bulk_docs", c.baseURI)
