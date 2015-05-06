@@ -27,6 +27,12 @@ func main() {
 		log.Printf("GOMAXPROCS is set at %v", os.Getenv("GOMAXPROCS"))
 	}
 
+	// start up a goroutine that will write the expvars to a file
+	go func() {
+		<-time.After(time.Second * 60)
+		writeExpvarsToFile()
+	}()
+
 	// start up an http server, just to serve up expvars
 	go http.ListenAndServe(":9876", nil)
 
@@ -115,6 +121,7 @@ func main() {
 		wg.Wait()
 	}
 
+	// capture final snapshot of expvars
 	writeExpvarsToFile()
 
 }
