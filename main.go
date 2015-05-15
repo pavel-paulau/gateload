@@ -29,8 +29,10 @@ func main() {
 
 	// start up a goroutine that will write the expvars to a file
 	go func() {
-		<-time.After(time.Second * 60)
-		writeExpvarsToFile()
+		for {
+			<-time.After(time.Second * 10)
+			writeExpvarsToFile()
+		}
 	}()
 
 	// start up an http server, just to serve up expvars
