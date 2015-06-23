@@ -28,7 +28,11 @@ func main() {
 	}
 
 	// start up an http server, just to serve up expvars
-	go http.ListenAndServe(":9876", nil)
+	go func() {
+		if err := http.ListenAndServe(":9876", nil); err != nil {
+			log.Fatalf("Could not listen on port 9876: %v", err)
+		}
+	}()
 
 	var config workload.Config
 	workload.ReadConfig(&config)
