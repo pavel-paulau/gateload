@@ -200,7 +200,7 @@ func writeExpvarsToFile() {
 	url := "http://localhost:9876/debug/vars"
 	resp, err := http.Get(url)
 	if err != nil {
-		log.Printf("Error writing expvars, failed connection to: %v", url)
+		log.Fatalf("Error writing expvars, failed connection to: %v", url)
 	}
 	defer resp.Body.Close()
 
