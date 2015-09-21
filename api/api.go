@@ -53,7 +53,7 @@ func (c *RestClient) DoRaw(req *http.Request, opName string) (resp *http.Respons
 		req.URL.RawQuery += "&"
 	}
 	req.URL.RawQuery += fmt.Sprintf("n=%d", serialNumber)
-	var start time.Time
+	start := time.Now()
 	if c.Verbose {
 		log.Printf("#%05d: %s %s", serialNumber, req.Method, req.URL)
 		start = time.Now()
