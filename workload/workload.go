@@ -339,7 +339,12 @@ func RunNewPuller(schedule RunSchedule, c *api.SyncGatewayClient, channel, name,
 	var wakeupTime = time.Now()
 
 	var lastSeq interface{}
-	lastSeqFloat := c.GetLastSeq()
+
+	// lastSeqFloat := c.GetLastSeq()
+	// harcode to 0 due to https://github.com/couchbase/sync_gateway/issues/1159#issuecomment-142731185
+
+	lastSeqFloat := 0
+
 	if lastSeqFloat < 0 {
 		Log("Puller, unable to establish last sequence number, exiting")
 		return

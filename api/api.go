@@ -314,6 +314,7 @@ func logPushToSubscriberTime(createdTime *time.Time, wakeup time.Time) {
 	}
 }
 
+// no longer used due to https://github.com/couchbase/sync_gateway/issues/1159#issuecomment-142731185
 func (c *SyncGatewayClient) GetLastSeq() float64 {
 	uri := fmt.Sprintf("%s/", c.baseURI)
 	req, _ := http.NewRequest("GET", uri, nil)
