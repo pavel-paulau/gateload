@@ -484,3 +484,17 @@ func recordHTTPClientStat(opname string, start time.Time, err error) {
 		histo.Update(int64(duration))
 	}
 }
+
+func ValidateExpvars() {
+
+	totalDocsPulled := glExpvars.Get("total_doc_pulled")
+	if totalDocsPulled == nil {
+		log.Fatalf("FATAL ERROR: No docs were pulled.  Test failed")
+	}
+
+	totalDocsFailedToPush := glExpvars.Get("total_doc_failed_to_push")
+	if totalDocsFailedToPush != nil {
+		log.Fatalf("FATAL ERROR: %v docs failed to push.  Test failed", totalDocsFailedToPush)
+	}
+
+}

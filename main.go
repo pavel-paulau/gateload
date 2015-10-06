@@ -119,6 +119,7 @@ func main() {
 		wg.Wait()
 	}
 
+	workload.ValidateExpvars()
 	writeExpvarsToFile()
 
 }
