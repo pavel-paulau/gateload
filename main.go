@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"runtime"
@@ -29,17 +27,10 @@ func main() {
 		log.Printf("GOMAXPROCS is set at %v", os.Getenv("GOMAXPROCS"))
 	}
 
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		log.Fatalf("Failed to start listener: %v", err)
-	}
-
-	expvarListenPort := listener.Addr().(*net.TCPAddr).Port
-
 	// start up an http server, just to serve up expvars
 	go func() {
-		if err := http.Serve(listener, nil); err != nil {
-			log.Fatalf("http Serve error: %v", err)
+		if err := http.ListenAndServe(":9876", nil); err != nil {
+			log.Fatalf("Could not listen on port 9876: %v", err)
 		}
 	}()
 
@@ -129,7 +120,7 @@ func main() {
 	}
 
 	workload.ValidateExpvars()
-	writeExpvarsToFile(expvarListenPort)
+	writeExpvarsToFile()
 
 }
 
@@ -199,10 +190,10 @@ func runUser(user *workload.User, config workload.Config, wg *sync.WaitGroup) {
 }
 
 // At the end of the run, write the full list of expvars to a file
-func writeExpvarsToFile(listenerPort int) {
+func writeExpvarsToFile() {
 
 	// read http
-	url := fmt.Sprintf("http://localhost:%d/debug/vars", listenerPort)
+	url := "http://localhost:9876/debug/vars"
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Fatalf("Error writing expvars, failed connection to: %v", url)
