@@ -95,6 +95,9 @@ func main() {
 	close(pendingUsers)
 
 	numChannels := (config.NumPullers + config.NumPushers) / config.ChannelActiveUsers
+	if numChannels == 0 {
+		log.Fatalf("Invalid configuration!  Pullers + pushers must be greater than ChannelActiveUsers")
+	}
 	channelRampUpDelayMs := time.Duration(config.RampUpIntervalMs/numChannels) * time.Millisecond
 
 	wg := sync.WaitGroup{}
