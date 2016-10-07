@@ -13,13 +13,18 @@ import (
 	"time"
 
 	"github.com/couchbaselabs/gateload/api"
-
 	"github.com/samuel/go-metrics/metrics"
+	"gopkg.in/alexcesaro/statsd.v2"
 )
+
+var kStatsPercentiles = []float64{0.5, 0.75, 0.9, 0.95, 0.99}
+var kPercentileNames = []string{"p50", "p75", "p90", "p95", "p99"}
 
 var glExpvars = expvar.NewMap("gateload")
 
 var (
+	GlConfig  *Config
+	statsdQuitChannel chan struct{}
 	opshistos = map[string]metrics.Histogram{}
 	histosMu  = sync.Mutex{}
 
@@ -184,7 +189,7 @@ func RunNewPusher(schedule RunSchedule, name string, c *api.SyncGatewayClient, c
 
 	docSizeGenerator, err := NewDocSizeGenerator(dist)
 	if err != nil {
-		Log("Error starting docuemnt pusher: %v", err)
+		Log("Error starting document pusher: %v", err)
 		return
 	}
 
@@ -497,4 +502,61 @@ func ValidateExpvars() {
 		log.Fatalf("FATAL ERROR: %v docs failed to push.  Test failed", totalDocsFailedToPush)
 	}
 
+}
+
+func StartStatsdClient() {
+	log.Printf("startStatsdClient() called")
+
+	if GlConfig.StatsdEnabled {
+		// statsClient *should* be safe to be shared among multiple
+		// goroutines, based on fact that connection returned from Dial
+		log.Printf("Creating statsd client")
+
+		c, err := statsd.New(statsd.Prefix("gateload_stats"), statsd.Address(GlConfig.StatsdEndpoint))
+		if err != nil {
+			// If nothing is listening on the target port, an error is returned and
+			// the returned client does nothing but is still usable. So we can
+			// just log the error and go on.
+			log.Print(err)
+		}
+		defer c.Close()
+
+		ticker := time.NewTicker(1 * time.Second)
+		statsdQuitChannel := make(chan struct{})
+		//Iterate over expvars and write to statsd client
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					glExpvars.Do(func(f expvar.KeyValue) {
+						log.Printf("Processing glExpvar key: %v, for Type %T", f.Key, f.Value)
+						switch v := f.Value.(type) {
+						case *expvar.Int:
+							c.Gauge(f.Key,v)
+						case *expvar.Map:
+							v.Do(func(g expvar.KeyValue) {
+								log.Printf("Processing expvar.Map key: %v, for Type %T", g.Key, g.Value)
+
+								switch w := g.Value.(type) {
+								case *metrics.HistogramExport:
+									perc := w.Histogram.Percentiles(kStatsPercentiles)
+									for i, p := range perc {
+										log.Printf("Processing percentile key: %v, vale: %v", f.Key+"."+g.Key+"."+kPercentileNames[i], p)
+										c.Gauge(kPercentileNames[i], p)
+									}
+								}
+							})
+						}
+					})
+				case <-statsdQuitChannel:
+					ticker.Stop()
+					return
+				}
+			}
+		}()
+	}
+}
+
+func StopStatsdClient() {
+	close(statsdQuitChannel)
 }

@@ -32,7 +32,9 @@ type Config struct {
 	LogRequests            bool
 	AuthType               string
 	Password               string
-	AddDocToTargetUser     bool // Grant access of doc to specific user, to trigger view queries (SG issue #825)
+	AddDocToTargetUser     bool   // Grant access of doc to specific user, to trigger view queries (SG issue #825)
+	StatsdEnabled          bool   // If true, will push stats to StatsdEndpoint
+	StatsdEndpoint         string // The endpoint of the statds server, eg localhost:8125
 }
 
 var DefaultConfig = Config{
@@ -55,12 +57,14 @@ var DefaultConfig = Config{
 	AuthType:               "session",
 	Password:               "password",
 	AddDocToTargetUser:     false,
+	StatsdEnabled:          false,
+	StatsdEndpoint:         "localhost:8125",
 }
 
 var Verbose = false
 
-func ReadConfig(config *Config) {
-	*config = DefaultConfig
+func ReadConfig() {
+	GlConfig = &DefaultConfig
 
 	workload_path := flag.String("workload", "workload.json", "Path to workload configuration")
 	flag.Parse()
@@ -70,9 +74,9 @@ func ReadConfig(config *Config) {
 		log.Fatal(err)
 	}
 
-	err = json.Unmarshal(workload, config)
+	err = json.Unmarshal(workload, GlConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
-	Verbose = config.Verbose
+	Verbose = GlConfig.Verbose
 }

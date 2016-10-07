@@ -34,52 +34,54 @@ func main() {
 		}
 	}()
 
-	var config workload.Config
-	workload.ReadConfig(&config)
+	workload.ReadConfig()
+
+	workload.StartStatsdClient()
+	defer workload.StopStatsdClient()
 
 	admin := api.SyncGatewayClient{}
 	admin.Init(
-		config.Hostname,
-		config.Database,
-		config.Port,
-		config.AdminPort,
-		config.LogRequests,
+		workload.GlConfig.Hostname,
+		workload.GlConfig.Database,
+		workload.GlConfig.Port,
+		workload.GlConfig.AdminPort,
+		workload.GlConfig.LogRequests,
 	)
 	if !admin.Valid() {
 		log.Fatalf("unable to connect to sync_gateway, check the hostname and database")
 	}
 
 	pendingUsers := make(chan *workload.User)
-	users := make([]*workload.User, config.NumPullers+config.NumPushers)
+	users := make([]*workload.User, workload.GlConfig.NumPullers+workload.GlConfig.NumPushers)
 
 	// start a routine to place pending users into array
 	go func() {
 		for pendingUser := range pendingUsers {
 
 			// users = append(users, pendingUser)
-			users[pendingUser.SeqId-config.UserOffset] = pendingUser
+			users[pendingUser.SeqId-workload.GlConfig.UserOffset] = pendingUser
 		}
 	}()
 
-	rampUpDelay := config.RampUpIntervalMs / (config.NumPullers + config.NumPushers)
+	rampUpDelay := workload.GlConfig.RampUpIntervalMs / (workload.GlConfig.NumPullers + workload.GlConfig.NumPushers)
 
 	// use a fixed number of workers to create the users/sessions
 	userIterator := workload.UserIterator(
-		config.NumPullers,
-		config.NumPushers,
-		config.UserOffset,
-		config.ChannelActiveUsers,
-		config.ChannelConcurrentUsers,
-		config.MinUserOffTimeMs,
-		config.MaxUserOffTimeMs,
+		workload.GlConfig.NumPullers,
+		workload.GlConfig.NumPushers,
+		workload.GlConfig.UserOffset,
+		workload.GlConfig.ChannelActiveUsers,
+		workload.GlConfig.ChannelConcurrentUsers,
+		workload.GlConfig.MinUserOffTimeMs,
+		workload.GlConfig.MaxUserOffTimeMs,
 		rampUpDelay,
-		config.RunTimeMs,
+		workload.GlConfig.RunTimeMs,
 	)
 	adminWg := sync.WaitGroup{}
 	worker := func() {
 		defer adminWg.Done()
 		for user := range userIterator {
-			createSession(&admin, user, config)
+			createSession(&admin, user, *workload.GlConfig)
 			pendingUsers <- user
 		}
 	}
@@ -94,11 +96,11 @@ func main() {
 	// close the pending users channel to free that routine
 	close(pendingUsers)
 
-	numChannels := (config.NumPullers + config.NumPushers) / config.ChannelActiveUsers
+	numChannels := (workload.GlConfig.NumPullers + workload.GlConfig.NumPushers) / workload.GlConfig.ChannelActiveUsers
 	if numChannels == 0 {
 		log.Fatalf("Invalid configuration!  Pullers + pushers must be greater than ChannelActiveUsers")
 	}
-	channelRampUpDelayMs := time.Duration(config.RampUpIntervalMs/numChannels) * time.Millisecond
+	channelRampUpDelayMs := time.Duration(workload.GlConfig.RampUpIntervalMs/numChannels) * time.Millisecond
 
 	wg := sync.WaitGroup{}
 	channel := ""
@@ -111,12 +113,12 @@ func main() {
 			channel = nextChannel
 		}
 		wg := sync.WaitGroup{}
-		go runUser(user, config, &wg)
+		go runUser(user, *workload.GlConfig, &wg)
 		wg.Add(1)
 	}
 
-	if config.RunTimeMs > 0 {
-		time.Sleep(time.Duration(config.RunTimeMs-config.RampUpIntervalMs) * time.Millisecond)
+	if workload.GlConfig.RunTimeMs > 0 {
+		time.Sleep(time.Duration(workload.GlConfig.RunTimeMs-workload.GlConfig.RampUpIntervalMs) * time.Millisecond)
 		log.Println("Shutting down clients")
 	} else {
 		wg.Wait()
@@ -217,3 +219,4 @@ func writeExpvarsToFile() {
 	log.Printf("Wrote results to %v", destFileName)
 
 }
+

@@ -11,5 +11,7 @@
 	"ChannelActiveUsers": 40,
 	"ChannelConcurrentUsers": 8,
 	"MinUserOffTimeMs": 10000,
-	"MaxUserOffTimeMs": 60000
+	"MaxUserOffTimeMs": 60000,
+	"StatsdEnabled": true,
+	"StatsdEndpoint": "localhost:8125"
 }
